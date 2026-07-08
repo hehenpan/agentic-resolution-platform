@@ -1,0 +1,14 @@
+Generic single-database configuration.
+
+
+# how to generate
+alembic revision --autogenerate -m "message"
+
+#how to apply to db
+alembic upgrade head
+
+#how to downgrade
+alembic downgrade -1
+
+#how to check migration history
+alembic history

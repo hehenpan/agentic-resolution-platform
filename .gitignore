@@ -223,3 +223,8 @@ __marimo__/
 #agents
 .agents
 .agents/*
+
+
+#logs
+api_server/logs
+api_server/logs/*
