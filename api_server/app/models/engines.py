@@ -1,7 +1,9 @@
 from sqlmodel import create_engine, SQLModel, Session
+from app.core.config import settings
 
-sqlite_file_name = "db.sqlite3"
+sqlite_file_name = settings.DB_FILE
 sqlite_url = f"sqlite:///{sqlite_file_name}"
+
 
 connect_args = {"check_same_thread": False}
 
