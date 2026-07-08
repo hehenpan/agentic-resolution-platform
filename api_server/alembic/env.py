@@ -13,6 +13,13 @@ import app.models.models
 # access to the values within the .ini file in use.
 config = context.config
 
+# Import application settings to override database URL dynamically based on APP_ENV
+from app.core.config import settings
+
+db_url = f"sqlite:///{settings.DB_FILE}"
+config.set_main_option("sqlalchemy.url", db_url)
+
+
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
 if config.config_file_name is not None:
