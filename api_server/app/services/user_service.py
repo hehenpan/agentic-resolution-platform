@@ -42,9 +42,15 @@ class UserService(object):
     def create_session(self, email:str) -> str:
         sessionid = generate_sessionid()
         
+        user = self.dbsession.query(User).filter(User.email == email).first()
+        if not user:
+            raise ValueError(f"User with email {email} not found when creating session")
+
         session_info = SessionInfo()
         session_info.sessionid = sessionid
         session_info.email = email
+        session_info.user_id = user.user_id
+        session_info.tenant_id = user.tenant_id
 
         try:
             self.dbsession.add(session_info)
@@ -54,6 +60,7 @@ class UserService(object):
             logger.error(f"user create session error {e}")
             self.dbsession.rollback()
             raise e
+
         
     
     def get_session_info(self, sessionid:str) -> SessionInfo:
