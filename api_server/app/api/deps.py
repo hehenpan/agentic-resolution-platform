@@ -1,7 +1,12 @@
-from fastapi import Request, Depends
+from fastapi import Request, Depends, HTTPException, status
 from sqlmodel import Session
 
+from app.models.engines import engine as default_engine
+from app.models.models import User, UserStatus
 from app.services.user_service import UserService
+from app.services.rbac_service import RBACService
+from app.core.constants import SESSION_INFO_KEY
+from app.middleware.middleware import safe_get_context
 
 def get_db(request: Request):
     """
@@ -18,4 +23,32 @@ def get_user_service(db: Session = Depends(get_db)) -> UserService:
     Dependency to get UserService service instance.
     """
     return UserService(dbsession=db)
+
+
+def get_rbac_service() -> RBACService:
+    """
+    Dependency to get RBACService instance.
+    """
+    return RBACService()
+
+
+async def get_current_user(db: Session = Depends(get_db)) -> User:
+    """
+    Dependency to get the current active user from session info in starlette-context.
+    """
+    session_info = safe_get_context(SESSION_INFO_KEY)
+    if not session_info:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated"
+        )
+    
+    user = db.query(User).filter(User.email == session_info.email).first()
+    if not user or user.status != UserStatus.ACTIVE:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found or inactive"
+        )
+    return user
+
 
