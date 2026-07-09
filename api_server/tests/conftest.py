@@ -7,7 +7,15 @@ from sqlmodel import SQLModel, create_engine, Session
 
 from app.main import app
 from app.api.deps import get_db
+from app.models.models import User, UserType, UserStatus
+from utils.commons import get_md5
 
+# Global Test Credentials
+TEST_ADMIN_EMAIL = "admin@example.com"
+TEST_ADMIN_PASSWORD = "adminpassword123"
+
+TEST_TENANT_ADMIN_EMAIL = "tenant_admin@example.com"
+TEST_TENANT_ADMIN_PASSWORD = "tenantadminpassword123"
 
 TEST_DATABASE_URL = "sqlite:///test_db.sqlite3"
 test_engine = create_engine(
@@ -22,8 +30,29 @@ def db_session_fixture():
     """
     SQLModel.metadata.create_all(test_engine)
     with Session(test_engine) as session:
+        # Pre-seed admin and tenant_admin accounts for testing
+        admin = User(
+            email=TEST_ADMIN_EMAIL,
+            pwd_md5=get_md5(TEST_ADMIN_PASSWORD),
+            user_type=UserType.ADMIN,
+            status=UserStatus.ACTIVE,
+            tenant_id=1
+        )
+        tenant_admin = User(
+            email=TEST_TENANT_ADMIN_EMAIL,
+            pwd_md5=get_md5(TEST_TENANT_ADMIN_PASSWORD),
+            user_type=UserType.TENANT_ADMIN,
+            status=UserStatus.ACTIVE,
+            tenant_id=1
+        )
+        session.add(admin)
+        session.add(tenant_admin)
+        session.commit()
+
         yield session
     SQLModel.metadata.drop_all(test_engine)
+
+
 
 
 @pytest.fixture(scope="session", autouse=True)

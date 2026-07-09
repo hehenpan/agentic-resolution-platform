@@ -49,6 +49,12 @@ class Settings(object):
         self.SESSION_EXPIRE_SECONDS = self._config.getint("auth", "session_expire_seconds", fallback=2592000)
         self.SESSION_COOKIE_SECURE = self._config.getboolean("auth", "session_cookie_secure", fallback=True)
 
+        # Storage configurations
+        self.STORAGE_DIR = self._config.get("storage", "storage_dir", fallback="data/files")
+        self.FILE_STORAGE_TYPE = self._config.get("storage", "storage_type", fallback="local").lower()
+
+
+
 
 settings = Settings(CONFIG_FILE_PATH, APP_ENV)
 
