@@ -1,4 +1,4 @@
-from sqlmodel import SQLModel, Field
+from sqlmodel import SQLModel, Field, Index
 import enum 
 from enum import Enum
 from utils.commons import get_current_ts, generate_user_id, generate_random_id
@@ -61,6 +61,9 @@ class FileSyncStatus(int, Enum):
     FAILED = 2
 
 class FileInfo(SQLModel, table = True):
+    __table_args__ = (
+        Index("idx_fileinfo_tenant_create", "tenant_id", "create_ts"),
+    )
     file_id: int = Field(primary_key=True, default_factory=generate_random_id)
     tenant_id: int = Field()
     owner_user_id: int = Field()
