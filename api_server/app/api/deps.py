@@ -52,3 +52,13 @@ async def get_current_user(db: Session = Depends(get_db)) -> User:
     return user
 
 
+from app.services.file_service import FileService
+
+def get_file_service(db: Session = Depends(get_db)) -> FileService:
+    """
+    Dependency to get FileService instance.
+    """
+    return FileService(dbsession=db)
+
+
+
