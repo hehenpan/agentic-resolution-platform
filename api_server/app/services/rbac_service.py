@@ -34,7 +34,14 @@ ROLE_PERMISSIONS = {
 }
 
 
-class RBACServiceSimple(object):
+class RBACServiceBase(object):
+    def __init__(self):
+        pass
+
+    def has_permission(self, user: User, permission: str, resource_tenant_id: int = None) -> bool:
+        raise NotImplementedError("Method not implemented")
+
+class RBACServiceSimple(RBACServiceBase):
     """
     Service to manage and evaluate Role-Based Access Control permissions,
     enforcing multi-tenant isolation.

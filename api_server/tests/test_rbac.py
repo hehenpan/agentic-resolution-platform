@@ -1,12 +1,13 @@
 import pytest
 from app.models.models import User, UserType, UserStatus
-from app.services.rbac_service import RBACServiceSimple, Permission
+from app.services.rbac_service import Permission
+from app.api.deps import get_rbac_service
 
 def test_rbac_service_admin_permissions():
     """
     Test that ADMIN has all permissions.
     """
-    rbac = RBACServiceSimple()
+    rbac = get_rbac_service()
     admin_user = User(
         email="admin@example.com",
         user_id=1,
@@ -23,11 +24,12 @@ def test_rbac_service_admin_permissions():
     assert rbac.has_permission(admin_user, Permission.USER_READ) is True
 
 
+
 def test_rbac_service_tenant_admin_permissions():
     """
     Test that TENANT_ADMIN has only tenant/user management permissions.
     """
-    rbac = RBACServiceSimple()
+    rbac = get_rbac_service()
     tenant_admin = User(
         email="tenant_admin@example.com",
         user_id=2,
@@ -51,7 +53,7 @@ def test_rbac_service_user_permissions():
     """
     Test that standard USER has only basic read permissions.
     """
-    rbac = RBACServiceSimple()
+    rbac = get_rbac_service()
     user = User(
         email="user@example.com",
         user_id=3,
@@ -73,7 +75,7 @@ def test_rbac_service_tenant_isolation():
     """
     Test that TENANT_ADMIN and USER permissions are isolated by tenant_id.
     """
-    rbac = RBACServiceSimple()
+    rbac = get_rbac_service()
     
     tenant_admin = User(
         email="tenant_admin@example.com",
@@ -108,7 +110,7 @@ def test_rbac_service_inactive_user():
     """
     Test that INACTIVE users are always denied all permissions.
     """
-    rbac = RBACServiceSimple()
+    rbac = get_rbac_service()
     
     inactive_admin = User(
         email="admin@example.com",
