@@ -158,3 +158,17 @@ class FileService(object):
         self.dbsession.refresh(file_info)
         logger.info(f"File index activated (status=ACTIVE) for file_id={file_id}")
         return file_info
+
+    def get_file_info(self, file_id: int) -> FileInfo | None:
+        """
+        Get file index metadata by file_id.
+        """
+        return self.dbsession.query(FileInfo).filter(FileInfo.file_id == file_id).first()
+
+    def get_file_content(self, file_info: FileInfo) -> bytes:
+        """
+        Load and return the physical raw file content from storage.
+        """
+        self.storage = create_file_raw_data_storage(file_info.file_storage_type)
+        return self.storage.load(file_info)
+

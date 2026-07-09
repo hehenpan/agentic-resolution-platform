@@ -34,12 +34,12 @@ ROLE_PERMISSIONS = {
 }
 
 
-class RBACService(object):
+class RBACServiceSimple(object):
     """
     Service to manage and evaluate Role-Based Access Control permissions,
     enforcing multi-tenant isolation.
     """
-    def has_permission(self, user: User, permission: str, target_tenant_id: int = None) -> bool:
+    def has_permission(self, user: User, permission: str, resource_tenant_id: int = None) -> bool:
         """
         Check if a user has a specific permission, optionally enforcing tenant boundary.
         """
@@ -52,12 +52,12 @@ class RBACService(object):
             
         # Enforce tenant isolation for Tenant Admin
         if user.user_type == UserType.TENANT_ADMIN:
-            if target_tenant_id is not None and user.tenant_id != target_tenant_id:
+            if resource_tenant_id is not None and user.tenant_id != resource_tenant_id:
                 return False
                 
         # Enforce tenant isolation for standard User
         if user.user_type == UserType.USER:
-            if target_tenant_id is not None and user.tenant_id != target_tenant_id:
+            if resource_tenant_id is not None and user.tenant_id != resource_tenant_id:
                 return False
                 
         return True

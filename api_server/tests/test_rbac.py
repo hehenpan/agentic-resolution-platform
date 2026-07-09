@@ -1,12 +1,12 @@
 import pytest
 from app.models.models import User, UserType, UserStatus
-from app.services.rbac_service import RBACService, Permission
+from app.services.rbac_service import RBACServiceSimple, Permission
 
 def test_rbac_service_admin_permissions():
     """
     Test that ADMIN has all permissions.
     """
-    rbac = RBACService()
+    rbac = RBACServiceSimple()
     admin_user = User(
         email="admin@example.com",
         user_id=1,
@@ -27,7 +27,7 @@ def test_rbac_service_tenant_admin_permissions():
     """
     Test that TENANT_ADMIN has only tenant/user management permissions.
     """
-    rbac = RBACService()
+    rbac = RBACServiceSimple()
     tenant_admin = User(
         email="tenant_admin@example.com",
         user_id=2,
@@ -51,7 +51,7 @@ def test_rbac_service_user_permissions():
     """
     Test that standard USER has only basic read permissions.
     """
-    rbac = RBACService()
+    rbac = RBACServiceSimple()
     user = User(
         email="user@example.com",
         user_id=3,
@@ -73,7 +73,7 @@ def test_rbac_service_tenant_isolation():
     """
     Test that TENANT_ADMIN and USER permissions are isolated by tenant_id.
     """
-    rbac = RBACService()
+    rbac = RBACServiceSimple()
     
     tenant_admin = User(
         email="tenant_admin@example.com",
@@ -84,10 +84,10 @@ def test_rbac_service_tenant_isolation():
     )
     
     # Operating on own tenant -> Allowed
-    assert rbac.has_permission(tenant_admin, Permission.USER_MANAGE, target_tenant_id=1) is True
+    assert rbac.has_permission(tenant_admin, Permission.USER_MANAGE, resource_tenant_id=1) is True
     
     # Operating on other tenant -> Denied
-    assert rbac.has_permission(tenant_admin, Permission.USER_MANAGE, target_tenant_id=2) is False
+    assert rbac.has_permission(tenant_admin, Permission.USER_MANAGE, resource_tenant_id=2) is False
     
     user = User(
         email="user@example.com",
@@ -98,17 +98,17 @@ def test_rbac_service_tenant_isolation():
     )
     
     # Operating on own tenant -> Allowed
-    assert rbac.has_permission(user, Permission.USER_READ, target_tenant_id=1) is True
+    assert rbac.has_permission(user, Permission.USER_READ, resource_tenant_id=user.tenant_id) is True
     
     # Operating on other tenant -> Denied
-    assert rbac.has_permission(user, Permission.USER_READ, target_tenant_id=2) is False
+    assert rbac.has_permission(user, Permission.USER_READ, resource_tenant_id=user.tenant_id + 1) is False
 
 
 def test_rbac_service_inactive_user():
     """
     Test that INACTIVE users are always denied all permissions.
     """
-    rbac = RBACService()
+    rbac = RBACServiceSimple()
     
     inactive_admin = User(
         email="admin@example.com",

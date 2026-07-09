@@ -4,7 +4,7 @@ from sqlmodel import Session
 from app.models.engines import engine as default_engine
 from app.models.models import User, UserStatus
 from app.services.user_service import UserService
-from app.services.rbac_service import RBACService
+from app.services.rbac_service import RBACServiceSimple
 from app.core.constants import SESSION_INFO_KEY
 from app.middleware.middleware import safe_get_context
 
@@ -25,11 +25,11 @@ def get_user_service(db: Session = Depends(get_db)) -> UserService:
     return UserService(dbsession=db)
 
 
-def get_rbac_service() -> RBACService:
+def get_rbac_service() -> RBACServiceSimple:
     """
-    Dependency to get RBACService instance.
+    Dependency to get RBACServiceSimple instance.
     """
-    return RBACService()
+    return RBACServiceSimple()
 
 
 async def get_current_user(db: Session = Depends(get_db)) -> User:
