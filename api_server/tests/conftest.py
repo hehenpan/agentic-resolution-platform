@@ -17,6 +17,9 @@ TEST_ADMIN_PASSWORD = "adminpassword123"
 TEST_TENANT_ADMIN_EMAIL = "tenant_admin@example.com"
 TEST_TENANT_ADMIN_PASSWORD = "tenantadminpassword123"
 
+TEST_USER_EMAIL = "user@example.com"
+TEST_USER_PASSWORD = "userpassword123"
+
 TEST_DATABASE_URL = "sqlite:///test_db.sqlite3"
 test_engine = create_engine(
     TEST_DATABASE_URL, 
@@ -30,7 +33,7 @@ def db_session_fixture():
     """
     SQLModel.metadata.create_all(test_engine)
     with Session(test_engine) as session:
-        # Pre-seed admin and tenant_admin accounts for testing
+        # Pre-seed admin, tenant_admin and user accounts for testing
         admin = User(
             email=TEST_ADMIN_EMAIL,
             pwd_md5=get_md5(TEST_ADMIN_PASSWORD),
@@ -45,12 +48,21 @@ def db_session_fixture():
             status=UserStatus.ACTIVE,
             tenant_id=1
         )
+        user = User(
+            email=TEST_USER_EMAIL,
+            pwd_md5=get_md5(TEST_USER_PASSWORD),
+            user_type=UserType.USER,
+            status=UserStatus.ACTIVE,
+            tenant_id=1
+        )
         session.add(admin)
         session.add(tenant_admin)
+        session.add(user)
         session.commit()
 
         yield session
     SQLModel.metadata.drop_all(test_engine)
+
 
 
 
