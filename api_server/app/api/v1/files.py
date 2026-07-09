@@ -3,7 +3,7 @@ from pydantic import ValidationError
 from app.api.deps import get_current_user, get_file_service, get_rbac_service
 from app.models.models import User, UserType
 from app.services.file_service import FileService
-from app.services.rbac_service import RBACServiceSimple, Permission
+from app.services.rbac_service import RBACServiceBase, Permission
 from app.schemas.common import ResponseBase, BizCode
 from app.schemas.files import FileDownloadRequest
 from utils.commons import get_bytes_md5
@@ -15,7 +15,7 @@ async def upload_file(
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
     file_service: FileService = Depends(get_file_service),
-    rbac_service: RBACServiceSimple = Depends(get_rbac_service)
+    rbac_service: RBACServiceBase = Depends(get_rbac_service)
 ):
     """
     Upload a file:
@@ -97,7 +97,7 @@ async def download_file(
     file_id: int,
     current_user: User = Depends(get_current_user),
     file_service: FileService = Depends(get_file_service),
-    rbac_service: RBACServiceSimple = Depends(get_rbac_service)
+    rbac_service: RBACServiceBase = Depends(get_rbac_service)
 ):
     """
     Download a file:
