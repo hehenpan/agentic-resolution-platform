@@ -70,10 +70,13 @@ def db_session_fixture():
 @pytest.fixture(scope="session", autouse=True)
 def cleanup_test_db(request):
     """
-    Automatically delete the physical test database file after the entire test session finishes.
+    Automatically delete the physical test database file and local storage files after the entire test session finishes.
     """
-    def remove_file():
-        # Get the database file path (relative to the directory from which pytest was run)
+    def remove_test_artifacts():
+        import shutil
+        from app.core.config import settings
+        
+        # 1. Clean up test database file
         db_file = "test_db.sqlite3"
         if os.path.exists(db_file):
             try:
@@ -81,8 +84,15 @@ def cleanup_test_db(request):
             except Exception as e:
                 logging.getLogger("tests").error(f"Error removing test database file: {e}")
                 
+        # 2. Clean up test files storage directory
+        if os.path.exists(settings.STORAGE_DIR):
+            try:
+                shutil.rmtree(settings.STORAGE_DIR)
+            except Exception as e:
+                logging.getLogger("tests").error(f"Error removing storage directory: {e}")
+                
     # Register callback to run at the end of the test session
-    request.addfinalizer(remove_file)
+    request.addfinalizer(remove_test_artifacts)
     
 
 @pytest.fixture(name="client")

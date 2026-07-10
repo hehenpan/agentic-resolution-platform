@@ -1,4 +1,6 @@
 import os
+import time
+from loguru import logger
 from fastapi import status
 from sqlmodel import Session
 from app.models.models import FileInfo, FileStatus
@@ -9,6 +11,26 @@ from utils.commons import get_bytes_md5
 
 TEST_FILE_NAME = "test_upload_file.txt"
 TEST_FILE_CONTENT = b"This is a test upload file content."
+
+def upload_file_helper(client, filename: str, file_content: bytes, expected_statuscode: int):
+    """
+    Helper function to upload a file and verify the response status and content.
+    Supports both success (201 Created) and failure cases.
+    """
+    files = {
+        "file": (filename, file_content, "text/plain")
+    }
+    response = client.post("https://testserver/api/v1/files/upload", files=files)
+    assert response.status_code == expected_statuscode
+    
+    if expected_statuscode == status.HTTP_201_CREATED:
+        res_data = response.json()
+        assert res_data["code"] == BizCode.SUCCESS
+        assert res_data["message"] == "File uploaded successfully"
+        assert res_data["data"]["file_name"] == filename
+        assert res_data["data"]["file_size"] == len(file_content)
+    logger.info(f"file uploaded: {response.json()}")    
+    return response
 
 def test_upload_download_file_success(client, db_session: Session):
     """
@@ -29,24 +51,11 @@ def test_upload_download_file_success(client, db_session: Session):
     login_resp = client.post("https://testserver/api/v1/auth/login", json=login_payload)
     assert login_resp.status_code == status.HTTP_200_OK
 
-    # Step 2: Upload file
+    # Step 2 & 3: Upload file and assert response
     file_content = TEST_FILE_CONTENT
-    files = {
-        "file": (TEST_FILE_NAME, file_content, "text/plain")
-    }
-    response = client.post("https://testserver/api/v1/files/upload", files=files)
-
-    # Step 3: Assert response
-    assert response.status_code == status.HTTP_201_CREATED
+    response = upload_file_helper(client, TEST_FILE_NAME, file_content, status.HTTP_201_CREATED)
     res_data = response.json()
-    assert res_data["code"] == BizCode.SUCCESS
-    assert res_data["message"] == "File uploaded successfully"
-
     file_id = res_data["data"]["file_id"]
-    file_name = res_data["data"]["file_name"]
-    file_size = res_data["data"]["file_size"]
-    assert file_name == TEST_FILE_NAME
-    assert file_size == len(file_content)
 
     # Step 4: Verify DB Index
     expected_md5 = get_bytes_md5(file_content)
@@ -70,10 +79,6 @@ def test_upload_download_file_success(client, db_session: Session):
     assert download_resp.content == file_content
     assert download_resp.headers["Content-Disposition"] == f'attachment; filename="{TEST_FILE_NAME}"'
 
-    # Step 7: Cleanup physical test file
-    if os.path.exists(file_path):
-        os.remove(file_path)
-
 
 
 
@@ -91,10 +96,87 @@ def test_upload_file_permission_denied(client):
 
     # 2. Attempt to upload
     file_content = b"This is unauthorized content."
-    files = {
-        "file": ("test_unauthorized.txt", file_content, "text/plain")
-    }
-    response = client.post("https://testserver/api/v1/files/upload", files=files)
-    assert response.status_code == status.HTTP_403_FORBIDDEN
+    response = upload_file_helper(client, "test_unauthorized.txt", file_content, status.HTTP_403_FORBIDDEN)
     assert response.json()["detail"] == "Permission denied"
+
+
+def test_list_files_pagination(client, db_session: Session):
+    """
+    Test pulling a cursor-paginated list of uploaded files:
+    1. Log in as tenant_admin.
+    2. Upload 10 distinct files with 2-second sleep in between.
+    3. Query first page with limit=4, assert newest files returned first.
+    4. Query second page, assert correct items returned.
+    5. Query third page, assert remaining items returned.
+    6. Query fourth page, assert 0 items and empty last_cursor.
+    7. Clean up all physical files from storage.
+    """
+    # Step 1: Login
+    login_payload = {
+        "email": TEST_TENANT_ADMIN_EMAIL,
+        "password": TEST_TENANT_ADMIN_PASSWORD
+    }
+    login_resp = client.post("https://testserver/api/v1/auth/login", json=login_payload)
+    assert login_resp.status_code == status.HTTP_200_OK
+
+    # Step 2: Upload 10 files
+    uploaded_filenames = []
+    for i in range(10):
+        filename = f"test_list_file_{i}.txt"
+        upload_file_helper(client, filename, TEST_FILE_CONTENT, status.HTTP_201_CREATED)
+        uploaded_filenames.append(filename)
+        if i < 9:
+            time.sleep(2)  # Pause to guarantee distinct timestamps
+
+    retrieved_items = []
+    cursor = ""
+    while True:
+        url = f"https://testserver/api/v1/files?cursor={cursor}&limit=4"
+        response = client.get(url)
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["code"] == BizCode.SUCCESS
+        
+        items = data["data"]["items"]
+        retrieved_items.extend(items)
+        
+        cursor = data["data"]["last_cursor"]
+        if not cursor:
+            break
+
+    # Verify we got at least 10 items (may include the one from first test)
+    # and the first 10 items are in correct descending order (9 down to 0)
+    assert len(retrieved_items) >= 10
+    for i in range(10):
+        item = retrieved_items[i]
+        assert item["file_name"] == f"test_list_file_{9 - i}.txt"
+        assert item["owner_email"] == TEST_TENANT_ADMIN_EMAIL
+        assert "owner_user_id" in item
+
+
+def test_upload_file_invalid_extension(client):
+    """
+    Test uploading files with invalid or unsupported extensions:
+    1. Log in as tenant_admin.
+    2. Try uploading with no extension, expect 400 Bad Request.
+    3. Try uploading with unsupported extension (.png), expect 400 Bad Request.
+    4. Try uploading valid md/pdf files, expect 201 Created.
+    """
+    # Step 1: Login
+    login_payload = {
+        "email": TEST_TENANT_ADMIN_EMAIL,
+        "password": TEST_TENANT_ADMIN_PASSWORD
+    }
+    login_resp = client.post("https://testserver/api/v1/auth/login", json=login_payload)
+    assert login_resp.status_code == status.HTTP_200_OK
+
+    # Step 2: Upload file with no extension
+    upload_file_helper(client, "test_file_no_ext", b"content", status.HTTP_400_BAD_REQUEST)
+
+    # Step 3: Upload file with unsupported extension
+    upload_file_helper(client, "test_file.png", b"content", status.HTTP_400_BAD_REQUEST)
+
+    # Step 4: Upload valid files
+    upload_file_helper(client, "test_file.md", b"content", status.HTTP_201_CREATED)
+    upload_file_helper(client, "test_file.pdf", b"content", status.HTTP_201_CREATED)
 

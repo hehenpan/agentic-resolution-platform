@@ -62,7 +62,7 @@ class FileSyncStatus(int, Enum):
 
 class FileInfo(SQLModel, table = True):
     __table_args__ = (
-        Index("idx_fileinfo_tenant_create", "tenant_id", "create_ts"),
+        Index("idx_fileinfo_tenant_create_file", "tenant_id", "create_ts", "file_id"),
     )
     file_id: int = Field(primary_key=True, default_factory=generate_random_id)
     tenant_id: int = Field()
