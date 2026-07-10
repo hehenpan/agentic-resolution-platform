@@ -1,5 +1,6 @@
 import os
 from sqlmodel import Session
+from sqlalchemy import or_, and_
 from app.models.models import FileInfo, FileStatus, FileSyncStatus, FileStorageType
 from utils.commons import generate_uuid_hex, get_current_ts
 from app.core.config import settings
@@ -102,9 +103,23 @@ class FileService(object):
     """
     Service class managing file indexing metadata and physical data storage.
     """
+    ALLOWED_EXTENSIONS = [".txt", ".md", ".pdf"]
+
     def __init__(self, dbsession: Session):
         self.dbsession = dbsession
         self.storage = create_file_raw_data_storage()
+
+    def validate_filename(self, filename: str) -> bool:
+        """
+        Validate that the filename has a valid extension (must be one of: .txt, .md, .pdf).
+        Returns True if valid, False otherwise.
+        """
+        if not filename:
+            return False
+        ext = os.path.splitext(filename)[1].lower()
+        if ext in self.ALLOWED_EXTENSIONS:
+            return True
+        return False
 
     def create_file_index(self, tenant_id: int, owner_user_id: int, owner_email: str, filename: str, file_size: int, file_md5_hash: str) -> FileInfo:
         """
@@ -171,4 +186,51 @@ class FileService(object):
         """
         self.storage = create_file_raw_data_storage(file_info.file_storage_type)
         return self.storage.load(file_info)
+
+    def list_files_by_tenant(self, tenant_id: int, cursor: str = "", limit: int = 20) -> tuple[list[FileInfo], str]:
+        """
+        List files in the tenant using keyset (cursor) pagination.
+        Ordered by create_ts DESC, file_id DESC.
+        Returns:
+            list[FileInfo]: The list of FileInfo records.
+            str: The last_cursor for fetching the next page.
+        """
+        last_create_ts = None
+        last_file_id = None
+        
+        if cursor:
+            try:
+                parts = cursor.split("_")
+                if len(parts) != 2:
+                    raise ValueError(f"Invalid cursor format: {cursor}")
+                last_create_ts = int(parts[0])
+                last_file_id = int(parts[1])
+            except Exception as e:
+                logger.error(f"Failed to parse cursor '{cursor}': {e}")
+                raise ValueError(f"Invalid cursor format: {str(e)}")
+
+        query = self.dbsession.query(FileInfo).filter(
+            FileInfo.tenant_id == tenant_id,
+            FileInfo.status == FileStatus.ACTIVE
+        )
+
+        if last_create_ts is not None and last_file_id is not None:
+            query = query.filter(
+                or_(
+                    FileInfo.create_ts < last_create_ts,
+                    and_(
+                        FileInfo.create_ts == last_create_ts,
+                        FileInfo.file_id < last_file_id
+                    )
+                )
+            )
+
+        results = query.order_by(FileInfo.create_ts.desc(), FileInfo.file_id.desc()).limit(limit).all()
+
+        next_cursor = ""
+        if len(results) > 0:
+            last_item = results[-1]
+            next_cursor = f"{last_item.create_ts}_{last_item.file_id}"
+
+        return results, next_cursor
 

@@ -3,9 +3,10 @@ from pydantic import ValidationError
 from app.api.deps import get_current_user, get_file_service, get_rbac_service
 from app.models.models import User, UserType
 from app.services.file_service import FileService
+from loguru import logger
 from app.services.rbac_service import RBACServiceBase, Permission
 from app.schemas.common import ResponseBase, BizCode
-from app.schemas.files import FileDownloadRequest
+from app.schemas.files import FileDownloadRequest, FileListResponse, FileListResponseData
 from utils.commons import get_bytes_md5
 
 file_router = APIRouter()
@@ -33,6 +34,13 @@ async def upload_file(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Permission denied"
+        )
+
+    # Enforce filename extension constraints
+    if not file_service.validate_filename(file.filename):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Unsupported file format. Only txt, md, and pdf are allowed."
         )
 
     try:
@@ -88,6 +96,59 @@ async def upload_file(
             "file_id": file_info.file_id,
             "file_name": file_info.file_name,
             "file_size": file_info.file_size
+        }
+    )
+
+
+@file_router.get("/files", response_model=FileListResponse)
+async def list_files(
+    cursor: str = "",
+    limit: int = 20,
+    current_user: User = Depends(get_current_user),
+    file_service: FileService = Depends(get_file_service),
+    rbac_service: RBACServiceBase = Depends(get_rbac_service)
+):
+    """
+    List files in the tenant with cursor pagination:
+    1. Enforces Permission.USER_READ.
+    2. Queries files belonging to the tenant.
+    3. Handles cursor parsing and database retrieval.
+    """
+    if not rbac_service.has_permission(
+        user=current_user,
+        permission=Permission.USER_READ,
+        resource_tenant_id=current_user.tenant_id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Permission denied"
+        )
+
+    try:
+        items, next_cursor = file_service.list_files_by_tenant(
+            tenant_id=current_user.tenant_id,
+            cursor=cursor,
+            limit=limit
+        )
+    except ValueError as e:
+        logger.error(f"Failed to list files due to invalid parameters: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        logger.error(f"Failed to list files: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to list files: {str(e)}"
+        )
+
+    return ResponseBase(
+        code=BizCode.SUCCESS,
+        message="Success",
+        data={
+            "items": items,
+            "last_cursor": next_cursor
         }
     )
 
