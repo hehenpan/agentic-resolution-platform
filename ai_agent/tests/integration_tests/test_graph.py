@@ -1,6 +1,7 @@
 import pytest
+from loguru import logger
 
-from agent import graph
+from agent import example_graph
 
 pytestmark = pytest.mark.anyio
 
@@ -8,5 +9,8 @@ pytestmark = pytest.mark.anyio
 @pytest.mark.langsmith
 async def test_agent_simple_passthrough() -> None:
     inputs = {"changeme": "some_val"}
-    res = await graph.ainvoke(inputs)
+    config = {"configurable": {"thread_id": "test-thread-id"}}
+    
+    res = await example_graph.ainvoke(inputs, config=config)
     assert res is not None
+    logger.info(f"test_agent_simple_passthrough result: {res}")
