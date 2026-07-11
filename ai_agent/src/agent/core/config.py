@@ -33,4 +33,9 @@ class Settings(object):
         # Database configurations
         self.DB_FILE = self._config.get("database", "db_file", fallback="db.sqlite3")
 
+        # Qdrant configurations
+        self.QDRANT_PATH = self._config.get("qdrant", "path", fallback=None)
+        self.QDRANT_URL = self._config.get("qdrant", "url", fallback=None)
+        self.QDRANT_LOCATION = self._config.get("qdrant", "location", fallback=None)
+
 settings = Settings(CONFIG_FILE_PATH, APP_ENV)
