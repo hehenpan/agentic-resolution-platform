@@ -1,6 +1,11 @@
 import os
 import sqlite3
 import pytest
+from dotenv import load_dotenv
+
+# Load environment variables for tests (e.g. GOOGLE_API_KEY)
+load_dotenv()
+
 from agent.core.config import settings
 from langgraph.checkpoint.sqlite import SqliteSaver
 
@@ -50,8 +55,11 @@ def clean_test_db_fixture():
 def set_test_checkpointer():
     """
     Function-scoped autouse fixture: automatically configures example_graph
-    with an in-memory checkpointer for testing.
+    and file_ingest_graph with an in-memory checkpointer for testing.
     """
     from langgraph.checkpoint.memory import MemorySaver
     from agent.example_graph import example_graph
+    from agent.file_ingest_graph import file_ingest_graph
+    
     example_graph.checkpointer = MemorySaver()
+    file_ingest_graph.checkpointer = MemorySaver()
