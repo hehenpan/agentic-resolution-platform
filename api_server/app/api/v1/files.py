@@ -89,6 +89,12 @@ async def upload_file(
             detail=f"Failed to save file content or activate index: {str(e)}"
         )
 
+    # Step 4: Dispatch the file upload finish event
+    try:
+        file_service.send_upload_file_finish_event(file_info)
+    except Exception as e:
+        logger.error(f"Failed to send upload file finish event for file_id={file_info.file_id}: {e}")
+
     return ResponseBase(
         code=BizCode.SUCCESS,
         message="File uploaded successfully",

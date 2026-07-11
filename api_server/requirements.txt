@@ -8,3 +8,4 @@ email-validator
 alembic
 starlette_context
 python-multipart
+langgraph-cli
