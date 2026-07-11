@@ -5,6 +5,9 @@ from app.models.models import FileInfo, FileStatus, FileSyncStatus, FileStorageT
 from utils.commons import generate_uuid_hex, get_current_ts
 from app.core.config import settings
 from loguru import logger
+from starlette_context import context
+from app.core.mq_task import get_mq_task_manager, MQMessageUploadFileFinish, MSGMetaData, MSGContextData
+from app.core.context import get_request_id
 
 
 
@@ -172,6 +175,7 @@ class FileService(object):
         self.dbsession.commit()
         self.dbsession.refresh(file_info)
         logger.info(f"File index activated (status=ACTIVE) for file_id={file_id}")
+
         return file_info
 
     def get_file_info(self, file_id: int) -> FileInfo | None:
@@ -233,4 +237,39 @@ class FileService(object):
             next_cursor = f"{last_item.create_ts}_{last_item.file_id}"
 
         return results, next_cursor
+
+    def send_upload_file_finish_event(self, file_info: FileInfo):
+        # 1. Load physical file content
+        content = self.get_file_content(file_info)
+
+        # 2. Get current request ID from starlette context
+        request_id = get_request_id()
+
+        # 3. Construct context and metadata
+        context_data = MSGContextData(
+            request_id=request_id,
+            extra_context={}
+        )
+        meta_data = MSGMetaData(
+            producer_svc_name="api_server",
+            produce_time_ts=get_current_ts(),
+            operator_user_id=file_info.owner_user_id,
+            extra_meta={}
+        )
+
+        # 4. Construct payload/message
+        msg = MQMessageUploadFileFinish(
+            topic_name="file_upload_events",
+            partition_key=str(file_info.file_id),
+            meta_data=meta_data,
+            context_data=context_data,
+            file_name=file_info.file_name,
+            file_type=file_info.file_type,
+            file_size=file_info.file_size,
+            file_content=content
+        )
+
+        # 5. Send message using get_mq_task_manager()
+        get_mq_task_manager().send_message(msg)
+        logger.info(f"Successfully sent upload finish event for file_id={file_info.file_id}")
 
