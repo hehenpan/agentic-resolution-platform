@@ -4,10 +4,13 @@ import pytest
 from agent.core.config import settings
 from langgraph.checkpoint.sqlite import SqliteSaver
 
-TEST_DB_FILE = "test_db.sqlite"
+TEST_DB_FILE = "test_db_ai_agent.sqlite"
 
 # Override configuration database file dynamically for tests
 settings.DB_FILE = TEST_DB_FILE
+settings.QDRANT_LOCATION = ":memory:"
+settings.QDRANT_PATH = None
+settings.QDRANT_URL = None
 
 @pytest.fixture(scope="session")
 def anyio_backend():
