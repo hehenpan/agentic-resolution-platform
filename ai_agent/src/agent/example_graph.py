@@ -8,8 +8,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Dict
 
-import sqlite3
-from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.graph import StateGraph
 from langgraph.runtime import Runtime
 from typing_extensions import TypedDict
@@ -50,12 +48,13 @@ async def call_model(state: State, runtime: Runtime[Context]) -> Dict[str, Any]:
 
 
 # Define the graph
-conn = sqlite3.connect(settings.DB_FILE, check_same_thread=False)
-memory = SqliteSaver(conn)
+from agent.core.checkpoint import LazyAsyncSqliteSaver
 
-graph = (
+memory = LazyAsyncSqliteSaver(settings.DB_FILE)
+
+example_graph = (
     StateGraph(State, context_schema=Context)
     .add_node(call_model)
     .add_edge("__start__", "call_model")
-    .compile(name="New Graph", checkpointer=memory)
+    .compile(name="example graph", checkpointer=memory)
 )

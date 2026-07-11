@@ -3,6 +3,9 @@ import logging
 import pytest
 from fastapi.testclient import TestClient
 from sqlmodel import SQLModel, create_engine, Session
+from microservice_client.ai_agent_client import AIAgentServerInterface
+from shared_common.schemas_ai_agent import RAGFileImportPayload
+import microservice_client.ai_agent_client
 
 
 from app.main import app
@@ -115,6 +118,35 @@ def client_fixture(db_session: Session):
     app.dependency_overrides.clear()
     if hasattr(app.state, "db_engine"):
         delattr(app.state, "db_engine")
+
+
+class MockAIAgentServer(AIAgentServerInterface):
+    def start(self):
+        pass
+
+    def stop(self):
+        pass
+
+    async def rag_file_import(self, payload: RAGFileImportPayload) -> bool:
+        logging.getLogger("tests").info(f"[MockAIAgentServer] mock rag_file_import called with file_id={payload.file_id}")
+        return True
+
+@pytest.fixture(scope="session", autouse=True)
+def mock_ai_agent_client_fixture():
+    """
+    Session-scoped autouse fixture: overrides the get_ai_agent_server_client factory function
+    to return a mock instance, preventing any real network calls to the AI Agent server during testing.
+    """
+    mock_instance = MockAIAgentServer()
+    original_func = microservice_client.ai_agent_client.get_ai_agent_server_client
+    
+    # Override
+    microservice_client.ai_agent_client.get_ai_agent_server_client = lambda: mock_instance
+    
+    yield mock_instance
+    
+    # Restore
+    microservice_client.ai_agent_client.get_ai_agent_server_client = original_func
 
 
     

@@ -53,6 +53,9 @@ class Settings(object):
         self.STORAGE_DIR = self._config.get("storage", "storage_dir", fallback="data/files")
         self.FILE_STORAGE_TYPE = self._config.get("storage", "storage_type", fallback="local").lower()
 
+        # AI Agent configurations
+        self.AI_AGENT_URL = self._config.get("ai_agent", "url", fallback=None)
+
 
 
 

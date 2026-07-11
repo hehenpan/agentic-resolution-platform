@@ -263,13 +263,19 @@ class FileService(object):
             partition_key=str(file_info.file_id),
             meta_data=meta_data,
             context_data=context_data,
+            file_id=file_info.file_id,
             file_name=file_info.file_name,
             file_type=file_info.file_type,
             file_size=file_info.file_size,
-            file_content=content
+            file_content=content,
+            tenant_id=file_info.tenant_id,
         )
 
         # 5. Send message using get_mq_task_manager()
-        get_mq_task_manager().send_message(msg)
+        get_mq_task_manager().send_message(
+            topic=msg.topic_name,
+            partition_key=msg.partition_key,
+            msg=msg,
+        )
         logger.info(f"Successfully sent upload finish event for file_id={file_info.file_id}")
 

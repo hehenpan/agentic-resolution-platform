@@ -44,3 +44,14 @@ def clean_test_db_fixture():
             os.remove(TEST_DB_FILE)
         except Exception as e:
             print(f"Failed to remove test SQLite file: {e}")
+
+
+@pytest.fixture(scope="function", autouse=True)
+def set_test_checkpointer():
+    """
+    Function-scoped autouse fixture: automatically configures example_graph
+    with an in-memory checkpointer for testing.
+    """
+    from langgraph.checkpoint.memory import MemorySaver
+    from agent.example_graph import example_graph
+    example_graph.checkpointer = MemorySaver()
