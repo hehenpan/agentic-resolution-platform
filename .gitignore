@@ -227,12 +227,18 @@ __marimo__/
 #agents
 .agents
 .agents/*
-
+AGENTS.md
 
 #logs
 api_server/logs
 api_server/logs/*
+ai_agent/logs
+ai_agent/logs/*
+mcp_server/logs
+mcp_server/logs/*
 
 #test data dir
 api_server/data
 api_server/data/*
+ai_agent/data
+ai_agent/data/*
