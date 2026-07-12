@@ -1,6 +1,6 @@
 from mcp.server.fastmcp import FastMCP
-from mcp_server.core.logger import setup_logging
-from mcp_server.core.database import init_db
+from core.logger import setup_logging
+from core.database import init_db
 
 # Initialize Logging
 logger = setup_logging()
@@ -15,7 +15,7 @@ logger.info("Initializing isolated database tables...")
 init_db()
 
 # Import tools package after defining mcp to register decorators
-import mcp_server.tools
+import tools
 
 def run() -> None:
     logger.info("Starting MCP Server...")

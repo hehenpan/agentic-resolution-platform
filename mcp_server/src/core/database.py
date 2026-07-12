@@ -1,7 +1,7 @@
 from contextlib import contextmanager
 from typing import Generator
 from sqlmodel import create_engine, Session, SQLModel
-from mcp_server.config import settings, BASE_DIR
+from config import settings, BASE_DIR
 
 db_file = settings.DB_FILE
 # Resolve database URL
