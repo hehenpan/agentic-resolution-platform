@@ -52,3 +52,30 @@ def clean_database_tables():
         for table in reversed(SQLModel.metadata.sorted_tables):
             session.execute(table.delete())
         session.commit()
+
+
+@pytest.fixture
+def seed_ecommerce_user():
+    """
+    Fixture to seed an ECommerceUser record in the database for testing.
+    Returns a dictionary of the seeded user's attributes to prevent DetachedInstanceError.
+    """
+    from models.db_models import ECommerceUser
+    with database.get_session() as session:
+        user = ECommerceUser(
+            user_name="Jane Doe",
+            pwd="hashed_password_2",
+            email="jane@example.com",
+            status=1,
+            create_ts=1700000001
+        )
+        session.add(user)
+        session.commit()
+        session.refresh(user)
+        return {
+            "user_id": user.user_id,
+            "user_name": user.user_name,
+            "email": user.email,
+            "status": user.status,
+            "create_ts": user.create_ts
+        }
