@@ -1,7 +1,7 @@
 import os
 import pytest
 from sqlmodel import SQLModel, create_engine
-from mcp_server.core import database
+from core import database
 
 TEST_DB_FILE = "mcp_test.sqlite3"
 

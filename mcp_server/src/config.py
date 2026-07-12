@@ -3,7 +3,7 @@ import configparser
 from pathlib import Path
 
 # Get project base directory path (mcp_server root directory)
-BASE_DIR = Path(__file__).resolve().parent.parent.parent
+BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Determine active environment (default to 'dev')
 APP_ENV = os.getenv("APP_ENV", "dev").lower()

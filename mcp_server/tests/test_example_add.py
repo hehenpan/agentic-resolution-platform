@@ -1,9 +1,9 @@
 import pytest
 from sqlmodel import select
-from mcp_server.schemas.example import ExampleAddRequest
-from mcp_server.tools.example import example_add
-from mcp_server.core.database import get_session
-from mcp_server.models.db_models import CalculationHistory
+from schemas.example import ExampleAddRequest
+from tools.example import example_add
+from core.database import get_session
+from models.db_models import CalculationHistory
 
 pytestmark = pytest.mark.anyio
 

@@ -1,6 +1,6 @@
 import time
 from sqlmodel import Session
-from mcp_server.models.db_models import CalculationHistory
+from models.db_models import CalculationHistory
 
 class CalculationService:
     """

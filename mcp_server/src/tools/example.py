@@ -1,7 +1,7 @@
-from mcp_server.main import mcp
-from mcp_server.core.database import get_session
-from mcp_server.schemas.example import ExampleAddRequest, ExampleAddResponse
-from mcp_server.services.calculation_service import CalculationService
+from main import mcp
+from core.database import get_session
+from schemas.example import ExampleAddRequest, ExampleAddResponse
+from services.calculation_service import CalculationService
 
 @mcp.tool()
 async def example_add(req: ExampleAddRequest) -> ExampleAddResponse:
