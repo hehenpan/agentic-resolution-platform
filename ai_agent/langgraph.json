@@ -2,8 +2,8 @@
   "$schema": "https://langgra.ph/schema.json",
   "dependencies": ["."],
   "graphs": {
-    "example_graph": "./src/agent/example_graph.py:example_graph",
-    "file_ingest_graph": "./src/agent/file_ingest_graph.py:file_ingest_graph"
+    "example_graph": "./src/agent/example_graph/graph.py:example_graph",
+    "file_ingest_graph": "./src/agent/file_ingest/graph.py:file_ingest_graph"
   },
   "env": ".env",
   "image_distro": "wolfi"

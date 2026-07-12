@@ -1,25 +1,19 @@
-from typing import Optional, List, Dict, Any
-from langgraph.graph import StateGraph
-from agent.core.checkpoint import LazyAsyncSqliteSaver
-from agent.core.config import settings
+from enum import Enum
 from agent.core.logger import logger
 from agent.core.constants import QDRANT_COLLECTION_RAG
 from agent.core.vectordb import get_vector_db, VectorPoint, RAGFileVectorPayload
 from agent.core.embedding import get_embedding_model
-from shared_common.schemas_ai_agent import RAGFileImportPayload
+from agent.file_ingest.state import FileIngestState, VectorizeOutput, StoreVectorDBOutput
 
-class FileIngestState(RAGFileImportPayload):
+class FileIngestNodes(str, Enum):
     """
-    LangGraph state schema for the file ingestion workflow.
-    Inherits payload fields from RAGFileImportPayload and adds 
-    intermediate/output state variables.
+    Enum defining the unique string identifiers for each node in the file ingest graph.
     """
-    text: Optional[str] = None
-    vector: Optional[List[float]] = None
-    status: Optional[str] = None
+    VECTORIZE_CONTENT = "vectorize_content"
+    STORE_IN_VECTOR_DB = "store_in_vector_db"
 
 
-async def vectorize_content(state: FileIngestState) -> Dict[str, Any]:
+async def vectorize_content(state: FileIngestState) -> VectorizeOutput:
     """
     Asynchronously decodes the file contents and generates a high-dimensional 
     embedding vector via the abstract EmbeddingModel.
@@ -38,10 +32,10 @@ async def vectorize_content(state: FileIngestState) -> Dict[str, Any]:
     embedding_model = get_embedding_model()
     vector = await embedding_model.aembed_query(text)
     
-    return {"text": text, "vector": vector}
+    return VectorizeOutput(text=text, vector=vector)
 
 
-async def store_in_vector_db(state: FileIngestState) -> Dict[str, Any]:
+async def store_in_vector_db(state: FileIngestState) -> StoreVectorDBOutput:
     """
     Stores the generated embedding vector and metadata payload inside the 
     vector database via the abstract VectorDB client.
@@ -74,23 +68,4 @@ async def store_in_vector_db(state: FileIngestState) -> Dict[str, Any]:
         points=[point]
     )
     
-    return {"status": "success"}
-
-
-# Define and assemble the StateGraph
-builder = StateGraph(FileIngestState)
-builder.add_node("vectorize_content", vectorize_content)
-builder.add_node("store_in_vector_db", store_in_vector_db)
-
-builder.add_edge("__start__", "vectorize_content")
-builder.add_edge("vectorize_content", "store_in_vector_db")
-builder.add_edge("store_in_vector_db", "__end__")
-
-# Initialize SQLite database checkpointer
-memory = LazyAsyncSqliteSaver(settings.DB_FILE)
-
-# Compile the final graph
-file_ingest_graph = builder.compile(
-    name="file ingest graph",
-    checkpointer=memory
-)
+    return StoreVectorDBOutput(status="success")

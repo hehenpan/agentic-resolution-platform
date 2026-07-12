@@ -1,7 +1,7 @@
 import os
 import pytest
 from loguru import logger
-from agent.file_ingest_graph import file_ingest_graph
+from agent.file_ingest import file_ingest_graph
 from agent.core.qdrant import get_qdrant_client
 from agent.core.constants import QDRANT_COLLECTION_RAG, GEMINI_EMBEDDING_DIM
 

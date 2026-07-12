@@ -59,7 +59,7 @@ def set_test_checkpointer():
     """
     from langgraph.checkpoint.memory import MemorySaver
     from agent.example_graph import example_graph
-    from agent.file_ingest_graph import file_ingest_graph
+    from agent.file_ingest import file_ingest_graph
     
     example_graph.checkpointer = MemorySaver()
     file_ingest_graph.checkpointer = MemorySaver()
