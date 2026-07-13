@@ -1,0 +1,6 @@
+user_id,user_name,pwd,email,status,phone,create_ts
+1001,John Doe,hashed_pwd_1,john@example.com,1,123-456-7890,1700000000
+1002,Jane Doe,hashed_pwd_2,jane@example.com,1,098-765-4321,1700000001
+1003,Bob Smith,hashed_pwd_3,bob@example.com,0,555-555-5555,1700000002
+1004,Alice Jones,hashed_pwd_4,alice@example.com,1,777-777-7777,1700000003
+1005,Charlie Brown,hashed_pwd_5,charlie@example.com,1,888-888-8888,1700000004

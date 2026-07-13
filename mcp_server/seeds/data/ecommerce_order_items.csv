@@ -1,0 +1,10 @@
+item_id,order_id,sku_id,sku_code,name,quantity,price
+5001,2001,840173,5004752_ea_000pns,Pams Standard UHT Milk 1l,2,2.29
+5002,2001,926418,5336975_ea_000pns,Whittaker's Banana Caramel Block 250g,3,7.29
+5003,2002,315907,5286185_ea_000pns,Banana Chips Refill Pack 270g,2,5.99
+5004,2002,840173,5004752_ea_000pns,Pams Standard UHT Milk 1l,3,2.29
+5005,2003,926418,5336975_ea_000pns,Whittaker's Banana Caramel Block 250g,2,7.29
+5006,2003,315907,5286185_ea_000pns,Banana Chips Refill Pack 270g,3,5.99
+5007,2004,840173,5004752_ea_000pns,Pams Standard UHT Milk 1l,3,2.29
+5008,2004,926418,5336975_ea_000pns,Whittaker's Banana Caramel Block 250g,2,7.29
+5009,2005,315907,5286185_ea_000pns,Banana Chips Refill Pack 270g,1,5.99

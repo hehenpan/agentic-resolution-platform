@@ -26,5 +26,6 @@ async def get_ecommerce_user(req: GetECommerceUserRequest) -> GetECommerceUserRe
             user_name=user.user_name,
             email=user.email,
             status=user.status,
+            phone=user.phone,
             create_ts=user.create_ts
         )

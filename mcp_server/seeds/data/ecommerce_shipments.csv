@@ -1,0 +1,5 @@
+shipment_id,order_id,tracking_number,carrier,status,shipping_address,created_ts,updated_ts
+10001,2001,TRACK-2001,FedEx,3,"9999A Main St, Auckland",1783307000,1783390000
+10002,2002,TRACK-2002,DHL,3,"8888B Queen St, Auckland",1783307500,1783400000
+10003,2003,TRACK-2003,SF Express,2,"7777C Dominion Rd, Auckland",1783308000,1783350000
+10004,2004,TRACK-2004,FedEx,1,"6666D Ponsonby Rd, Auckland",1783308500,1783313000
