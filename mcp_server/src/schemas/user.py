@@ -1,5 +1,6 @@
 from pydantic import BaseModel, Field
 from typing import Optional
+from models.db_models import UserStatus
 
 class GetECommerceUserRequest(BaseModel):
     """
@@ -16,5 +17,6 @@ class GetECommerceUserResponse(BaseModel):
     user_id: Optional[int] = Field(default=None, description="The unique user ID")
     user_name: Optional[str] = Field(default=None, description="The username")
     email: Optional[str] = Field(default=None, description="The user email")
-    status: Optional[int] = Field(default=None, description="Account status: 1 for ACTIVE, 0 for INACTIVE")
+    status: Optional[UserStatus] = Field(default=None, description="Account status: 1 for ACTIVE, 0 for INACTIVE")
+    phone: Optional[str] = Field(default=None, description="The user's contact phone number")
     create_ts: Optional[int] = Field(default=None, description="Account creation timestamp (Unix epoch)")

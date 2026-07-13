@@ -1,0 +1,6 @@
+order_id,user_id,email,status,total_amount,created_ts
+2001,1001,john@example.com,3,26.45,1783048000
+2002,1002,jane@example.com,3,18.85,1783048100
+2003,1004,alice@example.com,2,32.55,1783048200
+2004,1005,charlie@example.com,2,21.45,1783048300
+2005,1001,john@example.com,0,5.99,1783049000

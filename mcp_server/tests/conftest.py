@@ -67,6 +67,7 @@ def seed_ecommerce_user():
             pwd="hashed_password_2",
             email="jane@example.com",
             status=1,
+            phone="123-456-7890",
             create_ts=1700000001
         )
         session.add(user)
@@ -77,5 +78,36 @@ def seed_ecommerce_user():
             "user_name": user.user_name,
             "email": user.email,
             "status": user.status,
+            "phone": user.phone,
             "create_ts": user.create_ts
         }
+
+
+@pytest.fixture
+def seed_skus_catalog():
+    """
+    Fixture to selectively seed the SKU catalog in the database for testing.
+    Uses the seed_ecommerce_skus script to import from the default CSV.
+    """
+    from seeds.scripts.seed_ecommerce_skus import seed_ecommerce_skus
+    return seed_ecommerce_skus()
+
+
+@pytest.fixture
+def seed_users_catalog():
+    """
+    Fixture to selectively seed the ECommerceUser catalog in the database for testing.
+    Uses the seed_ecommerce_users script to import from the default CSV.
+    """
+    from seeds.scripts.seed_ecommerce_users import seed_ecommerce_users
+    return seed_ecommerce_users()
+
+
+@pytest.fixture
+def seed_orders_catalog(seed_users_catalog, seed_skus_catalog):
+    """
+    Fixture to selectively seed orders and shipments in the database for testing.
+    Depends on seed_users_catalog and seed_skus_catalog to satisfy constraints.
+    """
+    from seeds.scripts.seed_ecommerce_orders import seed_ecommerce_orders
+    return seed_ecommerce_orders()
