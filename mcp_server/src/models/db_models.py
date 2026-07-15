@@ -1,6 +1,41 @@
 from sqlmodel import SQLModel, Field, Index
 from typing import Optional
 from enum import Enum
+import time
+
+class ReturnStatus(int, Enum):
+    REQUESTED = 0
+    APPROVED = 1
+    REJECTED = 2
+    RECEIVED = 3
+    REFUNDED = 4
+    CANCELLED = 5
+
+
+class ReturnReasonCode(int, Enum):
+    CHANGE_OF_MIND = 0
+    DAMAGED = 1
+    WRONG_ITEM = 2
+    NOT_AS_DESCRIBED = 3
+    LATE_DELIVERY = 4
+
+
+class ItemCondition(int, Enum):
+    UNOPENED = 0
+    OPENED = 1
+    USED = 2
+    DAMAGED = 3
+
+
+class ReturnResolutionType(int, Enum):
+    REFUND = 0
+    STORE_CREDIT = 1
+    REJECT = 2
+
+
+class RefundMethod(int, Enum):
+    ORIGINAL_PAYMENT = 0
+    STORE_CREDIT = 1
 
 class OrderStatus(int, Enum):
     PENDING = 0
@@ -72,7 +107,7 @@ class ECommerceOrder(SQLModel, table=True):
 
 class ECommerceOrderItem(SQLModel, table=True):
     item_id: Optional[int] = Field(default=None, primary_key=True)
-    order_id: int = Field(default=None)
+    order_id: int = Field(default=None, index=True)
     sku_id: int = Field(default=None)
     sku_code: str = Field(default="")
     name: str = Field(default="")
@@ -94,7 +129,49 @@ class ECommerceShipment(SQLModel, table=True):
 class ECommerceShipmentEvent(SQLModel, table=True):
     event_id: Optional[int] = Field(default=None, primary_key=True)
     shipment_id: int = Field(default=None, index=True)
+    order_id: int = Field(default=None, index=True)
     status: ShipmentStatus = Field(default=ShipmentStatus.PENDING)
     location: str = Field(default="")
     description: str = Field(default="")
     event_ts: int = Field(default=0)
+
+
+class ECommerceReturnPolicy(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    policy_name: str = Field(default="")
+    order_type: str = Field(default="general")
+    return_window_days: int = Field(default=30)
+    allow_change_of_mind: bool = Field(default=True)
+    allow_damaged_return: bool = Field(default=True)
+    allow_wrong_item_return: bool = Field(default=True)
+    requires_unopened: bool = Field(default=False)
+    manual_review_if_opened: bool = Field(default=True)
+    refund_method: RefundMethod = Field(default=RefundMethod.ORIGINAL_PAYMENT)
+    active: bool = Field(default=True)
+    policy_text: str = Field(default="")
+    created_at: int = Field(default_factory=lambda: int(time.time()))
+    updated_at: int = Field(default_factory=lambda: int(time.time()))
+
+
+class ECommerceReturnRequest(SQLModel, table=True):
+    __table_args__ = (
+        Index("idx_return_order_created", "order_id", "created_at"),
+        Index("idx_return_customer_created", "customer_id", "created_at"),
+    )
+    
+    id: Optional[int] = Field(default=None, primary_key=True)
+    order_id: int = Field(default=None)
+    customer_id: int = Field(default=None)
+    status: ReturnStatus = Field(default=ReturnStatus.REQUESTED)
+    reason_code: ReturnReasonCode = Field(default=ReturnReasonCode.CHANGE_OF_MIND)
+    reason_text: str = Field(default="")
+    item_condition: ItemCondition = Field(default=ItemCondition.UNOPENED)
+    requested_at: int = Field(default_factory=lambda: int(time.time()))
+    approved_at: Optional[int] = Field(default=None)
+    rejected_at: Optional[int] = Field(default=None)
+    received_at: Optional[int] = Field(default=None)
+    closed_at: Optional[int] = Field(default=None)
+    resolution_type: Optional[ReturnResolutionType] = Field(default=None)
+    created_by: Optional[int] = Field(default=None, description="The user_id of the customer service agent operating this return")
+    created_at: int = Field(default_factory=lambda: int(time.time()))
+    updated_at: int = Field(default_factory=lambda: int(time.time()))

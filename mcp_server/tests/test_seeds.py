@@ -113,3 +113,13 @@ def test_seed_ecommerce_orders_is_idempotent() -> None:
 
         stored_events = session.exec(select(ECommerceShipmentEvent)).all()
         assert len(stored_events) == 13
+        
+        by_event_id = {ev.event_id: ev for ev in stored_events}
+        # Event 30001 (shipment 10001) must map to order 2001
+        assert by_event_id[30001].order_id == 2001
+        # Event 30005 (shipment 10002) must map to order 2002
+        assert by_event_id[30005].order_id == 2002
+        # Event 30009 (shipment 10003) must map to order 2003
+        assert by_event_id[30009].order_id == 2003
+        # Event 30012 (shipment 10004) must map to order 2004
+        assert by_event_id[30012].order_id == 2004

@@ -72,6 +72,7 @@ class ShipmentSeedRow:
 class ShipmentEventSeedRow:
     event_id: int
     shipment_id: int
+    order_id: int
     status: ShipmentStatus
     location: str
     description: str
@@ -197,7 +198,7 @@ def load_shipments(csv_path: Path = SHIPMENTS_CSV) -> list[ShipmentSeedRow]:
 
 def load_shipment_events(csv_path: Path = SHIPMENT_EVENTS_CSV) -> list[ShipmentEventSeedRow]:
     df = pd.read_csv(csv_path)
-    required_cols = ["event_id", "shipment_id", "status", "location", "description", "event_ts"]
+    required_cols = ["event_id", "shipment_id", "order_id", "status", "location", "description", "event_ts"]
     missing_cols = [col for col in required_cols if col not in df.columns]
     if missing_cols:
         raise ValueError(f"Missing columns in shipment events CSV: {missing_cols}")
@@ -208,6 +209,7 @@ def load_shipment_events(csv_path: Path = SHIPMENT_EVENTS_CSV) -> list[ShipmentE
         line = int(idx) + 2
         event_id = parse_int_field(row["event_id"], "event_id", line)
         shipment_id = parse_int_field(row["shipment_id"], "shipment_id", line)
+        order_id = parse_int_field(row["order_id"], "order_id", line)
         status_val = parse_int_field(row["status"], "status", line)
         event_ts = parse_int_field(row["event_ts"], "event_ts", line)
 
@@ -215,6 +217,7 @@ def load_shipment_events(csv_path: Path = SHIPMENT_EVENTS_CSV) -> list[ShipmentE
             ShipmentEventSeedRow(
                 event_id=event_id,
                 shipment_id=shipment_id,
+                order_id=order_id,
                 status=ShipmentStatus(status_val),
                 location=str(row["location"]).strip(),
                 description=str(row["description"]).strip(),
@@ -325,6 +328,7 @@ def seed_ecommerce_orders(
                         ECommerceShipmentEvent(
                             event_id=ev.event_id,
                             shipment_id=ev.shipment_id,
+                            order_id=ev.order_id,
                             status=ev.status,
                             location=ev.location,
                             description=ev.description,
@@ -334,6 +338,7 @@ def seed_ecommerce_orders(
                     events_ins += 1
                 else:
                     existing.shipment_id = ev.shipment_id
+                    existing.order_id = ev.order_id
                     existing.status = ev.status
                     existing.location = ev.location
                     existing.description = ev.description
