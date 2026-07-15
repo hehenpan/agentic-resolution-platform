@@ -200,3 +200,37 @@ def test_create_return_request_success() -> None:
         assert request.received_at is None
         assert request.closed_at is None
         assert request.resolution_type is None
+
+
+async def test_create_ecommerce_return_request_tool_success() -> None:
+    """
+    Verifies that create_ecommerce_return_request tool successfully inserts a record and returns details.
+    """
+    from schemas.returns import CreateReturnRequestInput
+    from tools.returns_tools import create_ecommerce_return_request
+    
+    req = CreateReturnRequestInput(
+        order_id=3001,
+        customer_id=1003,
+        reason_code=ReturnReasonCode.WRONG_ITEM,
+        reason_text="Too small size sent",
+        item_condition=ItemCondition.UNOPENED,
+        created_by=1002,
+    )
+    
+    res = await create_ecommerce_return_request(req)
+    
+    assert res.success is True
+    assert res.error_message is None
+    assert res.return_request is not None
+    assert res.return_request.order_id == 3001
+    assert res.return_request.customer_id == 1003
+    assert res.return_request.status == ReturnStatus.REQUESTED
+    assert res.return_request.reason_code == ReturnReasonCode.WRONG_ITEM
+    assert res.return_request.reason_text == "Too small size sent"
+    assert res.return_request.item_condition == ItemCondition.UNOPENED
+    assert res.return_request.created_by == 1002
+    assert res.return_request.requested_at > 0
+    assert res.return_request.created_at > 0
+    assert res.return_request.updated_at > 0
+

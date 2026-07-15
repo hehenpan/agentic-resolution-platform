@@ -1,5 +1,10 @@
 from sqlmodel import Session, select
-from models.db_models import ECommerceReturnRequest
+from models.db_models import (
+    ECommerceReturnRequest,
+    ReturnStatus,
+    ReturnReasonCode,
+    ItemCondition,
+)
 
 class ECommerceReturnService:
     """
@@ -30,3 +35,30 @@ class ECommerceReturnService:
             .order_by(ECommerceReturnRequest.created_at.desc())
         )
         return list(self.session.exec(statement).all())
+
+    def create_return_request(
+        self,
+        order_id: int,
+        customer_id: int,
+        reason_code: ReturnReasonCode,
+        reason_text: str,
+        item_condition: ItemCondition,
+        created_by: int | None,
+    ) -> ECommerceReturnRequest:
+        """
+        Creates a new ECommerceReturnRequest record in the database.
+        """
+        request = ECommerceReturnRequest(
+            order_id=order_id,
+            customer_id=customer_id,
+            status=ReturnStatus.REQUESTED,
+            reason_code=reason_code,
+            reason_text=reason_text,
+            item_condition=item_condition,
+            created_by=created_by,
+        )
+        self.session.add(request)
+        self.session.commit()
+        self.session.refresh(request)
+        return request
+

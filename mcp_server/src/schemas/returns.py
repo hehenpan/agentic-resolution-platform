@@ -55,3 +55,24 @@ class GetReturnRequestsByCustomerResponse(BaseModel):
     Pydantic schema representing the query result of returns associated with a customer.
     """
     returns: List[GetReturnRequestRecord] = Field(default_factory=list, description="The return requests for this customer, sorted by created_at descending")
+
+
+class CreateReturnRequestInput(BaseModel):
+    """
+    Pydantic schema representing the input to create a return request.
+    """
+    order_id: int = Field(..., description="The unique ID of the order to return")
+    customer_id: int = Field(..., description="The ID of the customer associated with the return")
+    reason_code: ReturnReasonCode = Field(..., description="The reason code for the return")
+    reason_text: Optional[str] = Field(default="", description="Additional reason explanation text")
+    item_condition: ItemCondition = Field(..., description="The condition of the product being returned")
+    created_by: Optional[int] = Field(default=None, description="The user_id of the agent who operates this return request creation")
+
+
+class CreateReturnRequestResponse(BaseModel):
+    """
+    Pydantic schema representing the output of a return request creation.
+    """
+    success: bool = Field(..., description="Whether the return request was successfully created")
+    return_request: Optional[GetReturnRequestRecord] = Field(default=None, description="The created return request details if successful")
+    error_message: Optional[str] = Field(default=None, description="An error explanation if success is False")

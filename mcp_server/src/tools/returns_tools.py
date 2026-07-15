@@ -6,6 +6,8 @@ from schemas.returns import (
     GetReturnRequestsByCustomerRequest,
     GetReturnRequestsByCustomerResponse,
     GetReturnRequestRecord,
+    CreateReturnRequestInput,
+    CreateReturnRequestResponse,
 )
 from services.return_service import ECommerceReturnService
 
@@ -75,3 +77,46 @@ async def get_return_requests_by_customer(req: GetReturnRequestsByCustomerReques
             for r in returns
         ]
         return GetReturnRequestsByCustomerResponse(returns=records)
+
+
+@mcp.tool()
+async def create_ecommerce_return_request(req: CreateReturnRequestInput) -> CreateReturnRequestResponse:
+    """
+    Creates a new customer return request record in the database.
+    
+    Returns the created return request details upon success.
+    """
+    try:
+        with get_session() as session:
+            service = ECommerceReturnService(session=session)
+            r = service.create_return_request(
+                order_id=req.order_id,
+                customer_id=req.customer_id,
+                reason_code=req.reason_code,
+                reason_text=req.reason_text or "",
+                item_condition=req.item_condition,
+                created_by=req.created_by,
+            )
+            
+            record = GetReturnRequestRecord(
+                id=r.id,
+                order_id=r.order_id,
+                customer_id=r.customer_id,
+                status=r.status,
+                reason_code=r.reason_code,
+                reason_text=r.reason_text,
+                item_condition=r.item_condition,
+                requested_at=r.requested_at,
+                approved_at=r.approved_at,
+                rejected_at=r.rejected_at,
+                received_at=r.received_at,
+                closed_at=r.closed_at,
+                resolution_type=r.resolution_type,
+                created_by=r.created_by,
+                created_at=r.created_at,
+                updated_at=r.updated_at,
+            )
+            return CreateReturnRequestResponse(success=True, return_request=record)
+    except Exception as e:
+        return CreateReturnRequestResponse(success=False, error_message=str(e))
+
