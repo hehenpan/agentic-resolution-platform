@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 from typing import List, Optional
-from models.db_models import (
+from shared_common.schemas.mcp_server.enums import (
     ReturnStatus,
     ReturnReasonCode,
     ItemCondition,

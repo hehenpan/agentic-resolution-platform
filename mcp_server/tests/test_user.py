@@ -1,5 +1,5 @@
 import pytest
-from schemas.user import GetECommerceUserRequest
+from shared_common.schemas.mcp_server.user import GetECommerceUserRequest
 from tools.user_tools import get_ecommerce_user
 
 pytestmark = pytest.mark.anyio

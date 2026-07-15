@@ -1,6 +1,6 @@
 from sqlmodel import SQLModel, Field, Index
-from typing import Optional
 from enum import Enum
+from typing import Optional
 import time
 
 class ReturnStatus(int, Enum):
@@ -36,6 +36,7 @@ class ReturnResolutionType(int, Enum):
 class RefundMethod(int, Enum):
     ORIGINAL_PAYMENT = 0
     STORE_CREDIT = 1
+
 
 class OrderStatus(int, Enum):
     PENDING = 0

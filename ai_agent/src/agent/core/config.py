@@ -38,4 +38,7 @@ class Settings(object):
         self.QDRANT_URL = self._config.get("qdrant", "url", fallback=None)
         self.QDRANT_LOCATION = self._config.get("qdrant", "location", fallback=None)
 
+        # MCP configurations
+        self.MCP_SERVER_URL = self._config.get("mcp", "server_url", fallback="http://localhost:8500/sse")
+
 settings = Settings(CONFIG_FILE_PATH, APP_ENV)
