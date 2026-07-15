@@ -1,5 +1,5 @@
 from sqlmodel import Session, select
-from models.db_models import ECommerceOrder
+from models.db_models import ECommerceOrder, ECommerceOrderItem
 
 class ECommerceOrderService:
     """
@@ -19,3 +19,19 @@ class ECommerceOrderService:
             .order_by(ECommerceOrder.created_ts.desc())
         )
         return list(self.session.exec(statement).all())
+
+    def get_order_with_items(self, order_id: int) -> tuple[ECommerceOrder | None, list[ECommerceOrderItem]]:
+        """
+        Retrieves the ECommerceOrder record and its associated ECommerceOrderItem list by order_id.
+        """
+        order = self.session.get(ECommerceOrder, order_id)
+        if order is None:
+            return None, []
+        
+        statement = (
+            select(ECommerceOrderItem)
+            .where(ECommerceOrderItem.order_id == order_id)
+        )
+        items = list(self.session.exec(statement).all())
+        return order, items
+

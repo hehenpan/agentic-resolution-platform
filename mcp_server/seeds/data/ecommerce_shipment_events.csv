@@ -1,14 +1,14 @@
-event_id,shipment_id,status,location,description,event_ts
-30001,10001,0,"Auckland Warehouse","Shipment created",1783307000
-30002,10001,1,"Auckland Sorting Center","Courier picked up",1783310000
-30003,10001,2,"Hamilton Depot","In transit",1783330000
-30004,10001,3,"9999A Main St, Auckland","Delivered, signature on file",1783390000
-30005,10002,0,"Auckland Warehouse","Shipment created",1783307500
-30006,10002,1,"Auckland Sorting Center","Courier picked up",1783311000
-30007,10002,2,"North Shore Depot","In transit",1783340000
-30008,10002,3,"8888B Queen St, Auckland","Delivered to mailbox",1783400000
-30009,10003,0,"Auckland Warehouse","Shipment created",1783308000
-30010,10003,1,"Auckland Sorting Center","Courier picked up",1783312000
-30011,10003,2,"Mount Eden Depot","In transit",1783350000
-30012,10004,0,"Auckland Warehouse","Shipment created",1783308500
-30013,10004,1,"Auckland Sorting Center","Courier picked up",1783313000
+event_id,shipment_id,order_id,status,location,description,event_ts
+30001,10001,2001,0,"Auckland Warehouse","Shipment created",1783307000
+30002,10001,2001,1,"Auckland Sorting Center","Courier picked up",1783310000
+30003,10001,2001,2,"Hamilton Depot","In transit",1783330000
+30004,10001,2001,3,"9999A Main St, Auckland","Delivered, signature on file",1783390000
+30005,10002,2002,0,"Auckland Warehouse","Shipment created",1783307500
+30006,10002,2002,1,"Auckland Sorting Center","Courier picked up",1783311000
+30007,10002,2002,2,"North Shore Depot","In transit",1783340000
+30008,10002,2002,3,"8888B Queen St, Auckland","Delivered to mailbox",1783400000
+30009,10003,2003,0,"Auckland Warehouse","Shipment created",1783308000
+30010,10003,2003,1,"Auckland Sorting Center","Courier picked up",1783312000
+30011,10003,2003,2,"Mount Eden Depot","In transit",1783350000
+30012,10004,2004,0,"Auckland Warehouse","Shipment created",1783308500
+30013,10004,2004,1,"Auckland Sorting Center","Courier picked up",1783313000

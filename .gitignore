@@ -221,6 +221,9 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
+#macos
+.DS_Store
+
 # LangGraph
 
 
