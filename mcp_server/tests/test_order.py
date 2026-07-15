@@ -1,5 +1,5 @@
 import pytest
-from schemas.order import GetECommerceOrdersRequest, GetECommerceOrderDetailsRequest
+from shared_common.schemas.mcp_server.order import GetECommerceOrdersRequest, GetECommerceOrderDetailsRequest
 from tools.order_tools import get_ecommerce_orders, get_ecommerce_order_details
 
 pytestmark = pytest.mark.anyio

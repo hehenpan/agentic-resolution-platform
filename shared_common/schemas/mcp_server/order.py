@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 from typing import List, Optional
-from models.db_models import OrderStatus
+from shared_common.schemas.mcp_server.enums import OrderStatus
 
 class GetECommerceOrdersRequest(BaseModel):
     """
@@ -66,7 +66,3 @@ class GetECommerceOrderDetailsResponse(BaseModel):
     exists: bool = Field(..., description="Whether the order exists. Check this field first before accessing other fields.")
     order: Optional[ECommerceOrderMeta] = Field(default=None, description="The order metadata, present if exists=True")
     items: List[ECommerceOrderItemRecord] = Field(default_factory=list, description="The list of product items in the order, present if exists=True")
-
-
-
-

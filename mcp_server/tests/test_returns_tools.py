@@ -10,7 +10,7 @@ from models.db_models import (
     ReturnResolutionType,
     RefundMethod,
 )
-from schemas.returns import (
+from shared_common.schemas.mcp_server.returns import (
     GetReturnRequestsByOrderRequest,
     GetReturnRequestsByCustomerRequest,
 )
@@ -206,7 +206,7 @@ async def test_create_ecommerce_return_request_tool_success() -> None:
     """
     Verifies that create_ecommerce_return_request tool successfully inserts a record and returns details.
     """
-    from schemas.returns import CreateReturnRequestInput
+    from shared_common.schemas.mcp_server.returns import CreateReturnRequestInput
     from tools.returns_tools import create_ecommerce_return_request
     
     req = CreateReturnRequestInput(

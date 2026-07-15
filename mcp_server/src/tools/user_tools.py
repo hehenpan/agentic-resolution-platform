@@ -1,6 +1,6 @@
 from main import mcp
 from core.database import get_session
-from schemas.user import GetECommerceUserRequest, GetECommerceUserResponse
+from shared_common.schemas.mcp_server.user import GetECommerceUserRequest, GetECommerceUserResponse
 from services.user_service import ECommerceUserService
 
 @mcp.tool()

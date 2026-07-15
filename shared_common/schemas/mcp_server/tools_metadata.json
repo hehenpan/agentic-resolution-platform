@@ -1,0 +1,323 @@
+[
+  {
+    "type": "function",
+    "function": {
+      "name": "example_add",
+      "description": "\n    Exposes a calculation tool that adds two numbers together.\n    Validates inputs, delegates calculation and database recording to CalculationService,\n    and returns the result.\n    ",
+      "parameters": {
+        "$defs": {
+          "ExampleAddRequest": {
+            "description": "Pydantic schema representing the request parameters for the example_add tool.",
+            "properties": {
+              "a": {
+                "description": "First value to sum",
+                "title": "A",
+                "type": "number"
+              },
+              "b": {
+                "description": "Second value to sum",
+                "title": "B",
+                "type": "number"
+              }
+            },
+            "required": [
+              "a",
+              "b"
+            ],
+            "title": "ExampleAddRequest",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "req": {
+            "$ref": "#/$defs/ExampleAddRequest"
+          }
+        },
+        "required": [
+          "req"
+        ],
+        "title": "example_addArguments",
+        "type": "object"
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "get_ecommerce_user",
+      "description": "\n    Queries the ECommerceUser database table to search for user metadata by email.\n    \n    If the user exists, returns user profile, status, and creation time.\n    If the user does not exist, returns exists=False. You should check the 'exists' \n    field first before describing the user status to the customer.\n    ",
+      "parameters": {
+        "$defs": {
+          "GetECommerceUserRequest": {
+            "description": "Pydantic schema representing the request parameters to query ECommerceUser.",
+            "properties": {
+              "email": {
+                "description": "The unique email of the user",
+                "title": "Email",
+                "type": "string"
+              }
+            },
+            "required": [
+              "email"
+            ],
+            "title": "GetECommerceUserRequest",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "req": {
+            "$ref": "#/$defs/GetECommerceUserRequest"
+          }
+        },
+        "required": [
+          "req"
+        ],
+        "title": "get_ecommerce_userArguments",
+        "type": "object"
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "get_ecommerce_orders",
+      "description": "\n    Queries the ECommerceOrder database table to search for all orders by customer email.\n    \n    Returns a list of order records sorted by creation timestamp descending.\n    If no orders are found, returns an empty list.\n    ",
+      "parameters": {
+        "$defs": {
+          "GetECommerceOrdersRequest": {
+            "description": "Pydantic schema representing the request parameters to query ECommerceOrders.",
+            "properties": {
+              "email": {
+                "description": "The email address of the customer to query orders for",
+                "title": "Email",
+                "type": "string"
+              }
+            },
+            "required": [
+              "email"
+            ],
+            "title": "GetECommerceOrdersRequest",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "req": {
+            "$ref": "#/$defs/GetECommerceOrdersRequest"
+          }
+        },
+        "required": [
+          "req"
+        ],
+        "title": "get_ecommerce_ordersArguments",
+        "type": "object"
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "get_ecommerce_order_details",
+      "description": "\n    Queries the database to retrieve metadata and the itemized product list of an order by order_id.\n    \n    If the order does not exist, returns exists=False. You should check the 'exists'\n    field first before describing the order details.\n    ",
+      "parameters": {
+        "$defs": {
+          "GetECommerceOrderDetailsRequest": {
+            "description": "Pydantic schema representing the request parameters to query ECommerceOrder details.",
+            "properties": {
+              "order_id": {
+                "description": "The unique ID of the order to retrieve details for",
+                "title": "Order Id",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "order_id"
+            ],
+            "title": "GetECommerceOrderDetailsRequest",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "req": {
+            "$ref": "#/$defs/GetECommerceOrderDetailsRequest"
+          }
+        },
+        "required": [
+          "req"
+        ],
+        "title": "get_ecommerce_order_detailsArguments",
+        "type": "object"
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "get_return_requests_by_order",
+      "description": "\n    Queries return requests associated with a specific order_id.\n    \n    Returns the matching return request record if found.\n    ",
+      "parameters": {
+        "$defs": {
+          "GetReturnRequestsByOrderRequest": {
+            "description": "Pydantic schema representing the request parameters to query return requests by order_id.",
+            "properties": {
+              "order_id": {
+                "description": "The unique ID of the order to query returns for",
+                "title": "Order Id",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "order_id"
+            ],
+            "title": "GetReturnRequestsByOrderRequest",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "req": {
+            "$ref": "#/$defs/GetReturnRequestsByOrderRequest"
+          }
+        },
+        "required": [
+          "req"
+        ],
+        "title": "get_return_requests_by_orderArguments",
+        "type": "object"
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "get_return_requests_by_customer",
+      "description": "\n    Queries return requests associated with a specific customer_id (user_id).\n    \n    Returns a list of matching return request records, sorted by creation time descending.\n    ",
+      "parameters": {
+        "$defs": {
+          "GetReturnRequestsByCustomerRequest": {
+            "description": "Pydantic schema representing the request parameters to query return requests by customer_id.",
+            "properties": {
+              "customer_id": {
+                "description": "The unique ID of the customer to query returns for",
+                "title": "Customer Id",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "customer_id"
+            ],
+            "title": "GetReturnRequestsByCustomerRequest",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "req": {
+            "$ref": "#/$defs/GetReturnRequestsByCustomerRequest"
+          }
+        },
+        "required": [
+          "req"
+        ],
+        "title": "get_return_requests_by_customerArguments",
+        "type": "object"
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "create_ecommerce_return_request",
+      "description": "\n    Creates a new customer return request record in the database.\n    \n    Returns the created return request details upon success.\n    ",
+      "parameters": {
+        "$defs": {
+          "CreateReturnRequestInput": {
+            "description": "Pydantic schema representing the input to create a return request.",
+            "properties": {
+              "order_id": {
+                "description": "The unique ID of the order to return",
+                "title": "Order Id",
+                "type": "integer"
+              },
+              "customer_id": {
+                "description": "The ID of the customer associated with the return",
+                "title": "Customer Id",
+                "type": "integer"
+              },
+              "reason_code": {
+                "$ref": "#/$defs/ReturnReasonCode",
+                "description": "The reason code for the return"
+              },
+              "reason_text": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": "",
+                "description": "Additional reason explanation text",
+                "title": "Reason Text"
+              },
+              "item_condition": {
+                "$ref": "#/$defs/ItemCondition",
+                "description": "The condition of the product being returned"
+              },
+              "created_by": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "The user_id of the agent who operates this return request creation",
+                "title": "Created By"
+              }
+            },
+            "required": [
+              "order_id",
+              "customer_id",
+              "reason_code",
+              "item_condition"
+            ],
+            "title": "CreateReturnRequestInput",
+            "type": "object"
+          },
+          "ItemCondition": {
+            "enum": [
+              0,
+              1,
+              2,
+              3
+            ],
+            "title": "ItemCondition",
+            "type": "integer"
+          },
+          "ReturnReasonCode": {
+            "enum": [
+              0,
+              1,
+              2,
+              3,
+              4
+            ],
+            "title": "ReturnReasonCode",
+            "type": "integer"
+          }
+        },
+        "properties": {
+          "req": {
+            "$ref": "#/$defs/CreateReturnRequestInput"
+          }
+        },
+        "required": [
+          "req"
+        ],
+        "title": "create_ecommerce_return_requestArguments",
+        "type": "object"
+      }
+    }
+  }
+]

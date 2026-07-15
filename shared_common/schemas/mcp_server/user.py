@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 from typing import Optional
-from models.db_models import UserStatus
+from shared_common.schemas.mcp_server.enums import UserStatus
 
 class GetECommerceUserRequest(BaseModel):
     """

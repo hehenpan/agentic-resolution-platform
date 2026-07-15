@@ -1,6 +1,6 @@
 from main import mcp
 from core.database import get_session
-from schemas.returns import (
+from shared_common.schemas.mcp_server.returns import (
     GetReturnRequestsByOrderRequest,
     GetReturnRequestsByOrderResponse,
     GetReturnRequestsByCustomerRequest,
