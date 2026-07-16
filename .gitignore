@@ -245,3 +245,10 @@ api_server/data
 api_server/data/*
 ai_agent/data
 ai_agent/data/*
+
+#vs code
+.vscode
+
+#agent plan
+plan
+plan/*

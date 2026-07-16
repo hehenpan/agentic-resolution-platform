@@ -3,7 +3,8 @@
   "dependencies": ["."],
   "graphs": {
     "example_graph": "./src/agent/example_graph/graph.py:example_graph",
-    "file_ingest_graph": "./src/agent/file_ingest/graph.py:file_ingest_graph"
+    "file_ingest_graph": "./src/agent/file_ingest/graph.py:file_ingest_graph",
+    "supervisor_graph": "./src/agent/supervisor/graph.py:supervisor_graph"
   },
   "env": ".env",
   "image_distro": "wolfi"
