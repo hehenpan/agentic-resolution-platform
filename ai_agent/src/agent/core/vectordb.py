@@ -1,12 +1,19 @@
+"""Vector database interfaces and Qdrant implementation."""
+
 from abc import ABC, abstractmethod
-from typing import Any, List, Union
+from typing import Any
+from uuid import UUID
+
 from pydantic import BaseModel, Field
+from qdrant_client.models import Distance, PointStruct, VectorParams
+
+from agent.core.constants import GEMINI_EMBEDDING_DIM
+from agent.core.qdrant import get_qdrant_client
+
 
 class RAGFileVectorPayload(BaseModel):
-    """
-    Schema representing the metadata payload stored in the vector database.
-    Does not contain heavy binary fields (file_content) or runtime statuses.
-    """
+    """Represent metadata stored with an embedded RAG file chunk."""
+
     file_id: int
     file_name: str
     file_size: int
@@ -18,64 +25,94 @@ class RAGFileVectorPayload(BaseModel):
 
 
 class VectorPoint(BaseModel):
-    """
-    A database-agnostic model representing a vector database record.
-    Supports either a generic dictionary or a Pydantic model as payload.
-    """
-    id: Union[int, str]
-    vector: List[float]
-    payload: Union[BaseModel, dict[str, Any]]
+    """Represent a database-agnostic vector database record."""
+
+    id: int | str | UUID
+    vector: list[float]
+    payload: BaseModel | dict[str, Any]
+
+
+class VectorSearchResult(BaseModel):
+    """Represent a database-agnostic vector search result."""
+
+    id: int | str | UUID
+    score: float
+    payload: dict[str, Any]
 
 
 class VectorDB(ABC):
-    """
-    Abstract base class representing the vector database interface.
-    """
+    """Define the vector database operations used by the agent service."""
+
     @abstractmethod
-    def upsert(self, collection_name: str, points: List[VectorPoint]) -> None:
-        """
-        Inserts or updates points in the specified collection.
-        Automatically creates the collection if it does not exist.
-        """
-        pass
+    def upsert(self, collection_name: str, points: list[VectorPoint]) -> None:
+        """Insert or update points in a collection."""
+
+    @abstractmethod
+    def search(
+        self,
+        collection_name: str,
+        query_vector: list[float],
+        limit: int,
+    ) -> list[VectorSearchResult]:
+        """Return the closest points in a collection."""
 
 
 class QdrantVectorDB(VectorDB):
-    """
-    Concrete implementation of VectorDB using Qdrant client.
-    """
-    def upsert(self, collection_name: str, points: List[VectorPoint]) -> None:
-        from qdrant_client.models import Distance, VectorParams, PointStruct
-        from agent.core.qdrant import get_qdrant_client
-        from agent.core.constants import GEMINI_EMBEDDING_DIM
-        
+    """Implement vector storage and retrieval with Qdrant."""
+
+    def upsert(self, collection_name: str, points: list[VectorPoint]) -> None:
+        """Insert or update points, creating the collection when required."""
         client = get_qdrant_client()
-        
-        # Automatically check and create collection if it doesn't exist
+
         if not client.collection_exists(collection_name):
             client.create_collection(
                 collection_name=collection_name,
-                vectors_config=VectorParams(size=GEMINI_EMBEDDING_DIM, distance=Distance.COSINE),
+                vectors_config=VectorParams(
+                    size=GEMINI_EMBEDDING_DIM,
+                    distance=Distance.COSINE,
+                ),
             )
-            
+
         qdrant_points = [
             PointStruct(
-                id=p.id,
-                vector=p.vector,
-                payload=p.payload.model_dump() if isinstance(p.payload, BaseModel) else p.payload
+                id=point.id,
+                vector=point.vector,
+                payload=(
+                    point.payload.model_dump()
+                    if isinstance(point.payload, BaseModel)
+                    else point.payload
+                ),
             )
-            for p in points
+            for point in points
         ]
-        
+
         client.upsert(
             collection_name=collection_name,
-            points=qdrant_points
+            points=qdrant_points,
         )
+
+    def search(
+        self,
+        collection_name: str,
+        query_vector: list[float],
+        limit: int,
+    ) -> list[VectorSearchResult]:
+        """Search a Qdrant collection for the closest points."""
+        response = get_qdrant_client().query_points(
+            collection_name=collection_name,
+            query=query_vector,
+            limit=limit,
+        )
+        return [
+            VectorSearchResult(
+                id=point.id,
+                score=point.score,
+                payload=point.payload or {},
+            )
+            for point in response.points
+        ]
 
 
 def get_vector_db() -> VectorDB:
-    """
-    Factory method to retrieve the active singleton VectorDB implementation.
-    """
-    # Currently defaults to Qdrant, but can load different providers based on configuration
+    """Create the configured vector database implementation."""
     return QdrantVectorDB()

@@ -1,0 +1,6 @@
+{
+  "model": "gemini-2.5-flash",
+  "question": "how many working days for products typically arrive for North Island?",
+  "route": "policy_qa",
+  "recorded_at": "2026-07-16T11:31:45.761481+00:00"
+}

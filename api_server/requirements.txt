@@ -11,4 +11,5 @@ python-multipart
 langgraph-cli
 langgraph-sdk
 mcp
-
+ruff
+mypy
