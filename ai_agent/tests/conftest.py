@@ -17,6 +17,62 @@ settings.QDRANT_LOCATION = ":memory:"
 settings.QDRANT_PATH = None
 settings.QDRANT_URL = None
 
+@pytest.fixture(scope="session", autouse=True)
+def mock_embedding_query_cache():
+    """
+    Fixture that automatically intercepts and mocks GeminiEmbeddingModel.aembed_query
+    to use the offline JSON query cache during tests, preventing online API calls.
+    """
+    import json
+    from pathlib import Path
+    from agent.core.embedding import GeminiEmbeddingModel
+    from unittest.mock import patch
+    
+    cache_path = Path(__file__).resolve().parent / "test_data" / "query_embeddings_cache.json"
+    
+    if cache_path.exists():
+        with open(cache_path, "r", encoding="utf-8") as f:
+            cache = json.load(f)
+    else:
+        cache = {}
+
+    async def mock_aembed_query(self, text: str):
+        if text in cache:
+            return cache[text]
+        raise ValueError(
+            f"Query embedding not found in offline cache for text: '{text}'. "
+            f"Please run `tests/scripts/build_test_vectordb.py` to regenerate the cache."
+        )
+
+    with patch.object(GeminiEmbeddingModel, "aembed_query", mock_aembed_query):
+        yield
+
+@pytest.fixture(scope="function")
+def prebuilt_qdrant_env():
+    """
+    Fixture that temporarily configures the Qdrant client to use the pre-built local database
+    instead of the default in-memory database, clearing client cache as needed.
+    """
+    from agent.core.qdrant import get_qdrant_client
+    from pathlib import Path
+    
+    db_path = str(Path(__file__).resolve().parent / "test_data" / "qdrant_prebuilt_db")
+    
+    orig_location = settings.QDRANT_LOCATION
+    orig_path = settings.QDRANT_PATH
+    
+    settings.QDRANT_LOCATION = None
+    settings.QDRANT_PATH = db_path
+    
+    # Clear get_qdrant_client cache to force reload with the new path
+    get_qdrant_client.cache_clear()
+    
+    yield
+    
+    settings.QDRANT_LOCATION = orig_location
+    settings.QDRANT_PATH = orig_path
+    get_qdrant_client.cache_clear()
+
 @pytest.fixture(scope="session")
 def anyio_backend():
     return "asyncio"
