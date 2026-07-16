@@ -1,0 +1,116 @@
+{
+  "dataset": "general_ecommerce_rag_corpus_mvp",
+  "description": "MVP ecommerce customer-service RAG corpus for the fictional company General Ecommerce.",
+  "company": {
+    "name": "General Ecommerce",
+    "homepage": "https://www.generalecommerce.com",
+    "is_fictional": true
+  },
+  "captured_at": "2026-07-16T03:18:51.766Z",
+  "documents": [
+    {
+      "id": "general_ecommerce_help_center",
+      "category": "faq_help_center",
+      "platform": "General Ecommerce",
+      "source_url": "https://www.generalecommerce.com/help",
+      "file": "faq_help_center/general_ecommerce_help_center.md",
+      "title": "General Ecommerce Help Centre",
+      "doc_type": "help_center",
+      "language": "en",
+      "captured_at": "2026-07-16T03:18:51.766Z",
+      "content_length_chars": 1806,
+      "extraction_method": "synthetic_brand_rewrite_from_public_ecommerce_reference"
+    },
+    {
+      "id": "general_ecommerce_returns_process_policy",
+      "category": "returns_refunds_exchanges",
+      "platform": "General Ecommerce",
+      "source_url": "https://www.generalecommerce.com/help/returns-process-policy",
+      "file": "returns_refunds_exchanges/general_ecommerce_returns_process_policy.md",
+      "title": "General Ecommerce Returns Process and Policy",
+      "doc_type": "policy",
+      "language": "en",
+      "captured_at": "2026-07-16T03:18:51.766Z",
+      "content_length_chars": 10909,
+      "extraction_method": "synthetic_brand_rewrite_from_public_ecommerce_reference"
+    },
+    {
+      "id": "general_ecommerce_delivery_rates_times_options",
+      "category": "shipping_delivery_freight",
+      "platform": "General Ecommerce",
+      "source_url": "https://www.generalecommerce.com/help/delivery-rates-times-options",
+      "file": "shipping_delivery_freight/general_ecommerce_delivery_rates_times_options.md",
+      "title": "General Ecommerce Delivery Rates, Times and Options",
+      "doc_type": "policy",
+      "language": "en",
+      "captured_at": "2026-07-16T03:18:51.766Z",
+      "content_length_chars": 3382,
+      "extraction_method": "synthetic_brand_rewrite_from_public_ecommerce_reference"
+    },
+    {
+      "id": "general_ecommerce_cancelling_or_modifying_order",
+      "category": "order_cancel_modify_track",
+      "platform": "General Ecommerce",
+      "source_url": "https://www.generalecommerce.com/help/cancelling-or-modifying-an-order",
+      "file": "order_cancel_modify_track/general_ecommerce_cancelling_or_modifying_order.md",
+      "title": "General Ecommerce Cancelling or Modifying an Order",
+      "doc_type": "help_article",
+      "language": "en",
+      "captured_at": "2026-07-16T03:18:51.766Z",
+      "content_length_chars": 1881,
+      "extraction_method": "synthetic_brand_rewrite_from_public_ecommerce_reference"
+    },
+    {
+      "id": "general_ecommerce_order_payment_issues",
+      "category": "payments_invoices_tax",
+      "platform": "General Ecommerce",
+      "source_url": "https://www.generalecommerce.com/help/order-payment-issues",
+      "file": "payments_invoices_tax/general_ecommerce_order_payment_issues.md",
+      "title": "General Ecommerce Order Payment Issues",
+      "doc_type": "help_article",
+      "language": "en",
+      "captured_at": "2026-07-16T03:18:51.766Z",
+      "content_length_chars": 2025,
+      "extraction_method": "synthetic_brand_rewrite_from_public_ecommerce_reference"
+    },
+    {
+      "id": "general_ecommerce_using_membership_key",
+      "category": "promotions_coupons_membership",
+      "platform": "General Ecommerce",
+      "source_url": "https://www.generalecommerce.com/help/using-a-membership-key",
+      "file": "promotions_coupons_membership/general_ecommerce_using_membership_key.md",
+      "title": "General Ecommerce Using a Membership Key",
+      "doc_type": "help_article",
+      "language": "en",
+      "captured_at": "2026-07-16T03:18:51.766Z",
+      "content_length_chars": 1465,
+      "extraction_method": "synthetic_brand_rewrite_from_public_ecommerce_reference"
+    },
+    {
+      "id": "general_ecommerce_privacy_statement",
+      "category": "privacy_terms",
+      "platform": "General Ecommerce",
+      "source_url": "https://www.generalecommerce.com/privacy",
+      "file": "privacy_terms/general_ecommerce_privacy_statement.md",
+      "title": "General Ecommerce Privacy Statement",
+      "doc_type": "policy",
+      "language": "en",
+      "captured_at": "2026-07-16T03:18:51.766Z",
+      "content_length_chars": 7153,
+      "extraction_method": "synthetic_brand_rewrite_from_public_ecommerce_reference"
+    },
+    {
+      "id": "general_ecommerce_terms_and_conditions",
+      "category": "privacy_terms",
+      "platform": "General Ecommerce",
+      "source_url": "https://www.generalecommerce.com/terms",
+      "file": "privacy_terms/general_ecommerce_terms_and_conditions.md",
+      "title": "General Ecommerce Terms and Conditions",
+      "doc_type": "terms",
+      "language": "en",
+      "captured_at": "2026-07-16T03:18:51.766Z",
+      "content_length_chars": 20346,
+      "extraction_method": "synthetic_brand_rewrite_from_public_ecommerce_reference"
+    }
+  ]
+}
