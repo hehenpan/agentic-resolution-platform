@@ -1,13 +1,14 @@
-import os
-import sys
-import json
 import asyncio
+import os
 import random
+import sys
 import time
 from pathlib import Path
-from qdrant_client import QdrantClient
-from qdrant_client.models import Distance, VectorParams, PointStruct
+
+from dotenv import load_dotenv
 from langchain_text_splitters import MarkdownTextSplitter
+from qdrant_client import QdrantClient
+from qdrant_client.models import Distance, PointStruct, VectorParams
 
 # Add src and repo root to sys.path to allow imports from agent and shared_common
 tests_dir = Path(__file__).resolve().parent.parent
@@ -22,25 +23,34 @@ if str(repo_root) not in sys.path:
 # Set test environment to load config.ini or config_dev.ini
 os.environ["APP_ENV"] = "dev"
 
-from dotenv import load_dotenv
 load_dotenv(dotenv_path=tests_dir.parent / ".env")
 
-from agent.core.embedding import get_embedding_model
-from agent.core.constants import GEMINI_EMBEDDING_DIM, QDRANT_COLLECTION_RAG
-from agent.core.vectordb import RAGFileVectorPayload
+from agent.core.constants import (  # noqa: E402
+    GEMINI_EMBEDDING_DIM,
+    QDRANT_COLLECTION_RAG,
+)
+from agent.core.embedding import get_embedding_model  # noqa: E402
+from agent.core.logger import logger  # noqa: E402
+from agent.core.vectordb import RAGFileVectorPayload  # noqa: E402
 
 DB_PATH = str(tests_dir / "test_data" / "qdrant_prebuilt_db")
 CACHE_FILE = str(tests_dir / "test_data" / "query_embeddings_cache.json")
 RAG_CORPUS_DIR = repo_root / "resource" / "rag_corpus"
 
 async def build_database():
-    print(f"[PRE-BUILD] Initializing Qdrant Client at persistent path: {DB_PATH}")
+    logger.info(
+        "[PRE-BUILD] Initializing Qdrant Client at persistent path: {}",
+        DB_PATH,
+    )
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     client = QdrantClient(path=DB_PATH)
 
     # Recreate the collection to ensure a clean state
     if client.collection_exists(QDRANT_COLLECTION_RAG):
-        print(f"[PRE-BUILD] Collection '{QDRANT_COLLECTION_RAG}' already exists. Recreating it...")
+        logger.info(
+            "[PRE-BUILD] Collection '{}' already exists. Recreating it...",
+            QDRANT_COLLECTION_RAG,
+        )
         client.delete_collection(QDRANT_COLLECTION_RAG)
 
     client.create_collection(
@@ -70,7 +80,10 @@ async def build_database():
     
     for file_path in target_files:
         if not file_path.exists():
-            print(f"[PRE-BUILD] Error: Target file not found at: {file_path}")
+            logger.error(
+                "[PRE-BUILD] Target file not found at: {}",
+                file_path,
+            )
             sys.exit(1)
             
         with open(file_path, "r", encoding="utf-8") as f:
@@ -88,13 +101,21 @@ async def build_database():
         files_to_process.append((file_path.name, file_path, chunks))
         total_chunks += len(chunks)
 
-    print(f"[PRE-BUILD] Found {len(files_to_process)} target files with total of {total_chunks} chunks to embed.")
+    logger.info(
+        "[PRE-BUILD] Found {} target files with a total of {} chunks to embed.",
+        len(files_to_process),
+        total_chunks,
+    )
 
     processed_chunks = 0
     start_time = time.time()
 
     for file_name, file_path, chunks in files_to_process:
-        print(f"\n[PRE-BUILD] Ingesting file: {file_name} ({len(chunks)} chunks)")
+        logger.info(
+            "[PRE-BUILD] Ingesting file: {} ({} chunks)",
+            file_name,
+            len(chunks),
+        )
         
         for idx, chunk in enumerate(chunks):
             processed_chunks += 1
@@ -103,10 +124,17 @@ async def build_database():
             est_total = (elapsed / processed_chunks) * total_chunks if processed_chunks > 0 else 0
             est_remaining = est_total - elapsed
             
-            print(
-                f"[PRE-BUILD] [{progress_pct:6.2f}%] Embedding chunk {idx+1}/{len(chunks)} of '{file_name}' "
-                f"(Total: {processed_chunks}/{total_chunks}). "
-                f"Elapsed: {elapsed:.1f}s, Est. remaining: {est_remaining:.1f}s"
+            logger.info(
+                "[PRE-BUILD] [{:6.2f}%] Embedding chunk {}/{} of '{}' "
+                "(Total: {}/{}). Elapsed: {:.1f}s, Est. remaining: {:.1f}s",
+                progress_pct,
+                idx + 1,
+                len(chunks),
+                file_name,
+                processed_chunks,
+                total_chunks,
+                elapsed,
+                est_remaining,
             )
 
             # Delay to avoid 429 rate limits
@@ -137,12 +165,16 @@ async def build_database():
                 )
             )
 
-    print(f"\n[PRE-BUILD] Upserting {len(points)} points into Qdrant collection '{QDRANT_COLLECTION_RAG}'")
+    logger.info(
+        "[PRE-BUILD] Upserting {} points into Qdrant collection '{}'",
+        len(points),
+        QDRANT_COLLECTION_RAG,
+    )
     client.upsert(
         collection_name=QDRANT_COLLECTION_RAG,
         points=points
     )
-    print("[PRE-BUILD] Database built successfully.")
+    logger.info("[PRE-BUILD] Database built successfully.")
 
 if __name__ == "__main__":
     asyncio.run(build_database())

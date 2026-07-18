@@ -1,23 +1,46 @@
-from langgraph.graph import StateGraph
+"""File Ingest graph assembly."""
+
+from langgraph.graph import END, START, StateGraph
+
 from agent.core.checkpoint import LazyAsyncSqliteSaver
 from agent.core.config import settings
-from agent.file_ingest.state import FileIngestState
-from agent.file_ingest.nodes import vectorize_content, store_in_vector_db, FileIngestNodes
+from agent.file_ingest.nodes import (
+    FileIngestNodeNames,
+    build_file_ingest_output,
+    store_in_vector_db,
+    vectorize_content,
+)
+from agent.file_ingest.state import (
+    FileIngestGraphNames,
+    FileIngestOutput,
+    FileIngestState,
+)
 
-# Define and assemble the StateGraph using the node name enum
-builder = StateGraph(FileIngestState)
-builder.add_node(FileIngestNodes.VECTORIZE_CONTENT, vectorize_content)
-builder.add_node(FileIngestNodes.STORE_IN_VECTOR_DB, store_in_vector_db)
+builder = StateGraph(
+    FileIngestState,
+    output_schema=FileIngestOutput,
+)
+builder.add_node(FileIngestNodeNames.VECTORIZE_CONTENT, vectorize_content)
+builder.add_node(FileIngestNodeNames.STORE_IN_VECTOR_DB, store_in_vector_db)
+builder.add_node(
+    FileIngestNodeNames.BUILD_FILE_INGEST_OUTPUT,
+    build_file_ingest_output,
+)
 
-builder.add_edge("__start__", FileIngestNodes.VECTORIZE_CONTENT)
-builder.add_edge(FileIngestNodes.VECTORIZE_CONTENT, FileIngestNodes.STORE_IN_VECTOR_DB)
-builder.add_edge(FileIngestNodes.STORE_IN_VECTOR_DB, "__end__")
+builder.add_edge(START, FileIngestNodeNames.VECTORIZE_CONTENT)
+builder.add_edge(
+    FileIngestNodeNames.VECTORIZE_CONTENT,
+    FileIngestNodeNames.STORE_IN_VECTOR_DB,
+)
+builder.add_edge(
+    FileIngestNodeNames.STORE_IN_VECTOR_DB,
+    FileIngestNodeNames.BUILD_FILE_INGEST_OUTPUT,
+)
+builder.add_edge(FileIngestNodeNames.BUILD_FILE_INGEST_OUTPUT, END)
 
-# Initialize SQLite database checkpointer
 memory = LazyAsyncSqliteSaver(settings.DB_FILE)
 
-# Compile the final graph
 file_ingest_graph = builder.compile(
-    name="file ingest graph",
-    checkpointer=memory
+    name=FileIngestGraphNames.FILE_INGEST.value,
+    checkpointer=memory,
 )

@@ -1,11 +1,13 @@
 """State and routing models for the supervisor graph."""
 
+import operator
 from enum import Enum
 from typing import Annotated
 
 from langchain_core.messages import AnyMessage, BaseMessage
 from langgraph.graph.message import add_messages
 from pydantic import BaseModel, Field
+from shared_common.schemas.ai_agent import AgentOutput
 
 
 class SelectRouteRoute(str, Enum):
@@ -14,7 +16,7 @@ class SelectRouteRoute(str, Enum):
     POLICY_QA = "policy_qa"
 
 
-class SupervisorNodes(str, Enum):
+class SupervisorNodeNames(str, Enum):
     """Define node identifiers for the supervisor graph."""
 
     ROUTE_REQUEST = "route_request"
@@ -31,9 +33,8 @@ class SupervisorGraphNames(str, Enum):
 class SupervisorState(BaseModel):
     """Represent shared conversation state managed by the supervisor."""
 
-    messages: Annotated[list[AnyMessage], add_messages] = Field(
-        default_factory=list
-    )
+    messages: Annotated[list[AnyMessage], add_messages] = Field(default_factory=list)
+    outputs: Annotated[list[AgentOutput], operator.add] = Field(default_factory=list)
     route: SelectRouteRoute | None = None
 
 
@@ -53,4 +54,5 @@ class SupervisorOutput(BaseModel):
     """Represent the externally relevant supervisor graph output."""
 
     messages: list[BaseMessage]
+    outputs: list[AgentOutput] = Field(default_factory=list)
     route: SelectRouteRoute | None = None

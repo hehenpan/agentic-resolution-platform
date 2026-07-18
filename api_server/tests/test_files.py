@@ -3,10 +3,17 @@ import time
 from loguru import logger
 from fastapi import status
 from sqlmodel import Session
+from app.core.mq_task import MQMessageUploadFileFinish
 from app.models.models import FileInfo, FileStatus
 from app.schemas.common import BizCode
 from app.core.config import settings
-from tests.conftest import TEST_TENANT_ADMIN_EMAIL, TEST_TENANT_ADMIN_PASSWORD, TEST_USER_EMAIL, TEST_USER_PASSWORD
+from tests.conftest import (
+    TEST_TENANT_ADMIN_EMAIL,
+    TEST_TENANT_ADMIN_PASSWORD,
+    TEST_USER_EMAIL,
+    TEST_USER_PASSWORD,
+    MockMQTaskManager,
+)
 from utils.commons import get_bytes_md5
 
 TEST_FILE_NAME = "test_upload_file.txt"
@@ -32,7 +39,11 @@ def upload_file_helper(client, filename: str, file_content: bytes, expected_stat
     logger.info(f"file uploaded: {response.json()}")    
     return response
 
-def test_upload_download_file_success(client, db_session: Session):
+def test_upload_download_file_success(
+    client,
+    db_session: Session,
+    mock_mq_task_manager: MockMQTaskManager,
+):
     """
     Test uploading and downloading a file as tenant_admin:
     1. Log in to establish an active session.
@@ -66,6 +77,11 @@ def test_upload_download_file_success(client, db_session: Session):
     assert file_info.file_md5_hash == expected_md5
     assert file_info.status == FileStatus.ACTIVE
     assert file_info.file_size == len(file_content)
+    assert len(mock_mq_task_manager.messages) == 1
+    _, partition_key, upload_message = mock_mq_task_manager.messages[0]
+    assert partition_key == str(file_id)
+    assert isinstance(upload_message, MQMessageUploadFileFinish)
+    assert upload_message.file_id == file_id
 
     # Step 5: Verify Local File content
     file_path = os.path.join(settings.STORAGE_DIR, file_info.file_storage_location)
@@ -179,4 +195,3 @@ def test_upload_file_invalid_extension(client):
     # Step 4: Upload valid files
     upload_file_helper(client, "test_file.md", b"content", status.HTTP_201_CREATED)
     upload_file_helper(client, "test_file.pdf", b"content", status.HTTP_201_CREATED)
-
