@@ -1,17 +1,24 @@
-import os
 import logging
-import pytest
-from fastapi.testclient import TestClient
-from sqlmodel import SQLModel, create_engine, Session
-from microservice_client.ai_agent_client import AIAgentServerInterface
-from shared_common.schemas_ai_agent import RAGFileImportPayload
+import os
+from collections.abc import AsyncIterator
+
 import microservice_client.ai_agent_client
-
-
-from app.main import app
+import pytest
 from app.api.deps import get_db
-from app.models.models import User, UserType, UserStatus
+from app.core.mq_task import MQMessageBase
+from app.main import app
+from app.models.models import User, UserStatus, UserType
+from fastapi.testclient import TestClient
+from microservice_client.ai_agent_client import AIAgentServerInterface
+from sqlmodel import Session, SQLModel, create_engine
 from utils.commons import get_md5
+
+from shared_common.schemas.ai_agent import (
+    AgentDomainEvent,
+    AgentRAGFileImportRequest,
+    AgentResumeRequest,
+    AgentTurnRequest,
+)
 
 # Global Test Credentials
 TEST_ADMIN_EMAIL = "admin@example.com"
@@ -77,6 +84,7 @@ def cleanup_test_db(request):
     """
     def remove_test_artifacts():
         import shutil
+
         from app.core.config import settings
         
         # 1. Clean up test database file
@@ -99,7 +107,10 @@ def cleanup_test_db(request):
     
 
 @pytest.fixture(name="client")
-def client_fixture(db_session: Session):
+def client_fixture(
+    db_session: Session,
+    mock_mq_task_manager: "MockMQTaskManager",
+):
     """
     Create a TestClient and override the get_db dependency.
     """
@@ -120,6 +131,29 @@ def client_fixture(db_session: Session):
         delattr(app.state, "db_engine")
 
 
+class MockMQTaskManager:
+    def __init__(self) -> None:
+        self.messages: list[tuple[str, str, MQMessageBase]] = []
+
+    def send_message(
+        self,
+        topic: str,
+        partition_key: str,
+        msg: MQMessageBase,
+    ) -> None:
+        self.messages.append((topic, partition_key, msg))
+
+
+@pytest.fixture(name="mock_mq_task_manager")
+def mock_mq_task_manager_fixture(monkeypatch: pytest.MonkeyPatch) -> MockMQTaskManager:
+    manager = MockMQTaskManager()
+    monkeypatch.setattr(
+        "app.services.file_service.get_mq_task_manager",
+        lambda: manager,
+    )
+    return manager
+
+
 class MockAIAgentServer(AIAgentServerInterface):
     def start(self):
         pass
@@ -127,9 +161,29 @@ class MockAIAgentServer(AIAgentServerInterface):
     def stop(self):
         pass
 
-    async def rag_file_import(self, payload: RAGFileImportPayload) -> bool:
-        logging.getLogger("tests").info(f"[MockAIAgentServer] mock rag_file_import called with file_id={payload.file_id}")
-        return True
+    def stream_turn(
+        self,
+        request: AgentTurnRequest,
+    ) -> AsyncIterator[AgentDomainEvent]:
+        return self._empty_stream()
+
+    def resume_turn(
+        self,
+        request: AgentResumeRequest,
+    ) -> AsyncIterator[AgentDomainEvent]:
+        return self._empty_stream()
+
+    def stream_rag_file_import(
+        self,
+        request: AgentRAGFileImportRequest,
+    ) -> AsyncIterator[AgentDomainEvent]:
+        return self._empty_stream()
+
+    @staticmethod
+    async def _empty_stream() -> AsyncIterator[AgentDomainEvent]:
+        events: list[AgentDomainEvent] = []
+        for event in events:
+            yield event
 
 @pytest.fixture(scope="session", autouse=True)
 def mock_ai_agent_client_fixture():

@@ -3,11 +3,14 @@
 from enum import Enum
 from typing import Any
 
-from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.messages import AIMessage
+from langgraph.runtime import Runtime
 
 from agent.core import embedding, llm, vectordb
 from agent.core.constants import QDRANT_COLLECTION_RAG
 from agent.core.logger import logger
+from agent.core.messages import require_latest_human_message_text
+from agent.supervisor.policy_qa.outputs import build_policy_qa_output
 from agent.supervisor.policy_qa.prompts import (
     POLICY_DRAFT_PROMPT,
     PolicyDraftPromptInput,
@@ -38,40 +41,29 @@ class RouteAfterRetrievalRoute(str, Enum):
     BUILD_RESPONSE = "build_response"
 
 
-def _latest_customer_question(state: PolicyQAState) -> str:
-    for message in reversed(state.messages):
-        if isinstance(message, HumanMessage):
-            question = message.text.strip()
-            if question:
-                return question
-
-    logger.error("Policy retrieval requires a non-empty HumanMessage")
-    raise ValueError("Policy retrieval requires a customer question")
-
-
 async def retrieve_policy(state: PolicyQAState) -> dict[str, Any]:
     """Retrieve policy chunks relevant to the latest customer question."""
-    question = _latest_customer_question(state)
+    question = require_latest_human_message_text(state.messages)
 
     try:
-        query_vector = await embedding.get_embedding_model().aembed_query(
-            question
-        )
+        query_vector = await embedding.get_embedding_model().aembed_query(question)
         results = vectordb.get_vector_db().search(
             collection_name=QDRANT_COLLECTION_RAG,
             query_vector=query_vector,
             limit=POLICY_RETRIEVAL_LIMIT,
         )
-        chunks = [
-            PolicyChunk(
-                point_id=result.id,
-                score=result.score,
-                file_name=result.payload["file_name"],
-                text=result.payload["text"],
-                payload=result.payload,
+        chunks: list[PolicyChunk] = []
+        for result in results:
+            payload = vectordb.RAGFileVectorPayload.model_validate(result.payload)
+            chunks.append(
+                PolicyChunk(
+                    point_id=result.id,
+                    score=result.score,
+                    file_name=payload.file_name,
+                    text=payload.text,
+                    payload=payload.model_dump(mode="json"),
+                )
             )
-            for result in results
-        ]
     except Exception as error:
         logger.error(
             "Failed to retrieve policy chunks from the RAG store: {}",
@@ -95,8 +87,7 @@ def route_after_retrieval(state: PolicyQAState) -> RouteAfterRetrievalRoute:
 
 def _format_policy_context(chunks: list[PolicyChunk]) -> str:
     return "\n\n".join(
-        f"Source file: {chunk.file_name}\n{chunk.text}"
-        for chunk in chunks
+        f"Source file: {chunk.file_name}\n{chunk.text}" for chunk in chunks
     )
 
 
@@ -114,9 +105,7 @@ async def generate_draft(state: PolicyQAState) -> dict[str, Any]:
             question=state.query,
             context=_format_policy_context(state.policy_chunks),
         )
-        prompt_value = await POLICY_DRAFT_PROMPT.ainvoke(
-            prompt_input.model_dump()
-        )
+        prompt_value = await POLICY_DRAFT_PROMPT.ainvoke(prompt_input.model_dump())
         response = await llm.get_llm_model().ainvoke(prompt_value)
         if not isinstance(response, AIMessage):
             raise TypeError("Policy draft LLM must return an AIMessage")
@@ -146,32 +135,51 @@ def _format_policy_references(chunks: list[PolicyChunk]) -> str:
     return "Policy references:\n\n" + "\n\n".join(references)
 
 
-async def build_response(state: PolicyQAState) -> dict[str, Any]:
+async def build_response(
+    state: PolicyQAState,
+    runtime: Runtime[None],
+) -> dict[str, Any]:
     """Build the final answer with exact policy excerpts and metadata."""
+    execution_info = runtime.execution_info
+    if execution_info is None or not execution_info.task_id:
+        logger.error("Policy response generation requires a graph task ID")
+        raise RuntimeError("Policy response generation requires a task ID")
+
     if not state.policy_chunks:
-        content = (
+        response_text = (
             "I could not find a relevant policy for this question. "
             "Please review the request manually."
         )
+        content = response_text
     else:
         references = _format_policy_references(state.policy_chunks)
         if state.draft:
-            content = f"{state.draft}\n\n{references}"
+            response_text = state.draft
         else:
-            content = (
+            response_text = (
                 "I could not prepare a polished response, but the relevant "
-                f"policy excerpts are included below.\n\n{references}"
+                "policy excerpts are included below."
             )
+        content = f"{response_text}\n\n{references}"
+
+    agent_output = build_policy_qa_output(
+        identity_scope=execution_info.task_id,
+        text=response_text,
+        policy_chunks=state.policy_chunks,
+    )
 
     response = AIMessage(
+        id=agent_output.output_id,
         content=content,
         type="ai",
         response_metadata={
             "policy_chunks": [
-                chunk.model_dump(mode="json")
-                for chunk in state.policy_chunks
+                chunk.model_dump(mode="json") for chunk in state.policy_chunks
             ]
         },
     )
-    update = BuildResponseUpdate(messages=[response])
+    update = BuildResponseUpdate(
+        messages=[response],
+        outputs=[agent_output],
+    )
     return update.model_dump(exclude_unset=True)

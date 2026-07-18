@@ -1,4 +1,3 @@
-import pytest
 from app.models.models import User, UserType, UserStatus
 from app.services.rbac_service import Permission
 from app.api.deps import get_rbac_service

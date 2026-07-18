@@ -4,6 +4,7 @@ from typing import Any
 
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage
+from shared_common.schemas.ai_agent import AgentOutput, SourcesPart, TextPart
 
 from agent.core import embedding, llm, vectordb
 from agent.supervisor.policy_qa import policy_qa_graph
@@ -57,7 +58,7 @@ async def test_policy_qa_graph_returns_draft_sources_and_metadata(
     monkeypatch.setattr(llm, "get_llm_model", lambda: fake_model)
 
     result = await policy_qa_graph.ainvoke(
-        {"messages": [HumanMessage(content=record["question"])]}
+        {"messages": [HumanMessage(content=record["question"])]},
     )
 
     response = result["messages"][-1]
@@ -77,6 +78,13 @@ async def test_policy_qa_graph_returns_draft_sources_and_metadata(
     assert chunks[0]["text"] in response.content
     assert chunks[0]["payload"]["file_name"] == chunks[0]["file_name"]
 
+    output = AgentOutput.model_validate(result["outputs"][0])
+    assert response.id == output.output_id
+    assert isinstance(output.parts[0], TextPart)
+    assert output.parts[0].text == record["draft"]
+    assert isinstance(output.parts[1], SourcesPart)
+    assert output.parts[1].sources[0].title == chunks[0]["file_name"]
+
 
 async def test_policy_qa_graph_keeps_sources_when_llm_fails(
     monkeypatch,
@@ -86,7 +94,7 @@ async def test_policy_qa_graph_keeps_sources_when_llm_fails(
     monkeypatch.setattr(llm, "get_llm_model", FailingPolicyLLM)
 
     result = await policy_qa_graph.ainvoke(
-        {"messages": [HumanMessage(content=record["question"])]}
+        {"messages": [HumanMessage(content=record["question"])]},
     )
 
     response = result["messages"][-1]
@@ -94,6 +102,11 @@ async def test_policy_qa_graph_keeps_sources_when_llm_fails(
     assert chunks
     assert "relevant policy excerpts" in response.content
     assert chunks[0]["text"] in response.content
+    output = AgentOutput.model_validate(result["outputs"][0])
+    assert isinstance(output.parts[0], TextPart)
+    assert "could not prepare a polished response" in output.parts[0].text
+    assert isinstance(output.parts[1], SourcesPart)
+    assert output.parts[1].sources
 
 
 async def test_policy_qa_graph_skips_llm_when_no_policy_is_found(
@@ -113,9 +126,14 @@ async def test_policy_qa_graph_skips_llm_when_no_policy_is_found(
     monkeypatch.setattr(llm, "get_llm_model", fail_if_llm_is_requested)
 
     result = await policy_qa_graph.ainvoke(
-        {"messages": [HumanMessage(content=record["question"])]}
+        {"messages": [HumanMessage(content=record["question"])]},
     )
 
     response = result["messages"][-1]
     assert response.response_metadata["policy_chunks"] == []
     assert "could not find a relevant policy" in response.content
+    output = AgentOutput.model_validate(result["outputs"][0])
+    assert isinstance(output.parts[0], TextPart)
+    assert "could not find a relevant policy" in output.parts[0].text
+    assert isinstance(output.parts[1], SourcesPart)
+    assert output.parts[1].sources == []

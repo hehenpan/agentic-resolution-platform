@@ -1,20 +1,19 @@
 from __future__ import annotations
-import os
+
 import asyncio
 from enum import Enum
-from pydantic import BaseModel
-from typing import Any, Literal, Union, Annotated
+from typing import Literal
+
 from loguru import logger
+from pydantic import BaseModel, JsonValue
+
+from app.models.engines import get_session
+from app.services.rag_file_import_service import RAGFileImportService
 from microservice_client import ai_agent_client
-from app.core.config import settings
-from shared_common.schemas_ai_agent import RAGFileImportPayload
+from shared_common.schemas.ai_agent import RAGFileImportPayload, RAGFileImportResult
 
 
-def get_mq_task_manager()->MQTaskManagerBase:
-    '''
-    
-    '''
-
+def get_mq_task_manager() -> MQTaskManagerBase:
     return MQTaskManagerImpLocal()
 
 
@@ -22,20 +21,16 @@ class EventType(str, Enum):
     UPLOAD_FILE_FINISH = "upload_file_finish"
 
 
-
 class MSGContextData(BaseModel):
     request_id: str
-    extra_context: dict[str, Any]
-    pass
+    extra_context: dict[str, JsonValue]
+
 
 class MSGMetaData(BaseModel):
     producer_svc_name: str
     produce_time_ts: int
     operator_user_id: int
-    extra_meta: dict[str, Any]
-    
-    pass
-
+    extra_meta: dict[str, JsonValue]
 
 
 class MQMessageBase(BaseModel):
@@ -44,7 +39,6 @@ class MQMessageBase(BaseModel):
     event_type: str
     meta_data: MSGMetaData
     context_data: MSGContextData
-    
 
 
 class MQMessageUploadFileFinish(MQMessageBase):
@@ -57,33 +51,33 @@ class MQMessageUploadFileFinish(MQMessageBase):
     tenant_id: int
 
 
-
-
-class MQTaskManagerBase(object):
-    def __init__(self):
-        pass
-
-    def send_message(self, topic: str, partition_key: str, msg: MQMessageBase):
+class MQTaskManagerBase:
+    def send_message(
+        self,
+        topic: str,
+        partition_key: str,
+        msg: MQMessageBase,
+    ) -> None:
         raise NotImplementedError("Method not implemented")
 
-    
-class MQTaskManagerImpLocal(MQTaskManagerBase):
-    def __init__(self):
-        super().__init__()
-        pass
 
-    def send_message(self, topic: str, partition_key: str, msg: MQMessageBase):
+class MQTaskManagerImpLocal(MQTaskManagerBase):
+    def send_message(
+        self,
+        topic: str,
+        partition_key: str,
+        msg: MQMessageBase,
+    ) -> None:
         match msg:
             case MQMessageUploadFileFinish():
                 asyncio.create_task(self.local_task_upload_file_finish(msg))
             case _:
                 raise ValueError(f"Unknown event type: {msg.event_type}")
-        pass
 
-
-    async def local_task_upload_file_finish(self, msg: MQMessageUploadFileFinish):
-        ai_agent_server_client = ai_agent_client.get_ai_agent_server_client()
-            
+    async def local_task_upload_file_finish(
+        self,
+        msg: MQMessageUploadFileFinish,
+    ) -> RAGFileImportResult | None:
         payload = RAGFileImportPayload(
             file_id=msg.file_id,
             file_name=msg.file_name,
@@ -94,6 +88,26 @@ class MQTaskManagerImpLocal(MQTaskManagerBase):
             extra_meta=msg.meta_data.extra_meta,
             extra_context=msg.context_data.extra_context,
         )
-        
-        await ai_agent_server_client.rag_file_import(payload)
-        logger.info(f"Local async task processing completed for file: {msg.file_name}")
+
+        try:
+            with get_session() as session:
+                service = RAGFileImportService(
+                    dbsession=session,
+                    agent_client=ai_agent_client.get_ai_agent_server_client(),
+                )
+                result = await service.import_file(
+                    payload=payload,
+                    operation_id=msg.context_data.request_id,
+                )
+        except Exception as error:
+            logger.error(
+                f"Local RAG file import task failed: file_id={msg.file_id}, "
+                f"error={type(error).__name__}: {error}"
+            )
+            return None
+
+        logger.info(
+            f"Local RAG file import task completed: "
+            f"file_id={msg.file_id}, file_name={msg.file_name}"
+        )
+        return result

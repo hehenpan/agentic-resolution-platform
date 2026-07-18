@@ -5,6 +5,7 @@ from uuid import UUID
 
 from langchain_core.messages import BaseMessage
 from pydantic import BaseModel, Field
+from shared_common.schemas.ai_agent import AgentOutput
 
 from agent.supervisor.state import SupervisorState
 
@@ -46,9 +47,11 @@ class BuildResponseUpdate(BaseModel):
     """Represent the state update returned by build_response."""
 
     messages: list[BaseMessage]
+    outputs: list[AgentOutput]
 
 
 class PolicyQAOutput(BaseModel):
     """Represent the Policy QA fields returned to the supervisor."""
 
     messages: list[BaseMessage]
+    outputs: list[AgentOutput]

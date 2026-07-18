@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from agent.core.config import settings
+from agent.core.logger import logger
 from langgraph.checkpoint.sqlite import SqliteSaver
 
 TEST_DB_FILE = "test_db_ai_agent.sqlite"
@@ -103,8 +104,8 @@ def clean_test_db_fixture():
     if os.path.exists(TEST_DB_FILE):
         try:
             os.remove(TEST_DB_FILE)
-        except Exception as e:
-            print(f"Failed to remove test SQLite file: {e}")
+        except Exception as error:
+            logger.error("Failed to remove test SQLite file: {}", error)
 
 
 @pytest.fixture(scope="function", autouse=True)
