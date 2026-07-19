@@ -2,9 +2,12 @@
 
 import pytest
 from shared_common.schemas.ai_agent import (
+    AgentCustomStreamEventKind,
     AgentDomainEventKind,
     AgentOutputProduced,
     AgentProgressReported,
+    AgentProgressStatus,
+    AgentProgressStreamEvent,
     AgentRunCompleted,
     AgentRunFailed,
     AgentRunInterrupted,
@@ -19,6 +22,7 @@ from ai_agent_sdk.agent_run_projector import (
 
 OUTPUT_ID_1 = "11111111-1111-5111-8111-111111111111"
 OUTPUT_ID_2 = "22222222-2222-5222-8222-222222222222"
+PROGRESS_ID = "33333333-3333-5333-8333-333333333333"
 THREAD_ID = "thread-1"
 CREATED_AT = 1_725_000_000
 
@@ -149,18 +153,18 @@ def test_non_output_event_identity_is_replay_stable() -> None:
     assert first != different
 
 
-def test_progress_normalizes_sources_and_has_stable_identity() -> None:
+def test_progress_uses_producer_id_and_projector_source_sequence() -> None:
+    progress = AgentProgressStreamEvent(
+        progress_id=PROGRESS_ID,
+        operation="policy_retrieval",
+        status=AgentProgressStatus.IN_PROGRESS,
+        progress_current=1,
+        progress_total=3,
+        details={"message": "Searching"},
+    )
     raw_event = {
         "type": "custom",
-        "data": {
-            "type": "progress",
-            "operation": "policy_retrieval",
-            "status": "in_progress",
-            "current": 1,
-            "total": 3,
-            "source_sequences": [9, 7, 9],
-            "details": {"message": "Searching"},
-        },
+        "data": progress.model_dump(mode="json"),
     }
 
     first = _projector().process(raw_event, source_sequence=8)
@@ -169,19 +173,72 @@ def test_progress_normalizes_sources_and_has_stable_identity() -> None:
     assert first == replayed
     assert len(first) == 1
     assert isinstance(first[0], AgentProgressReported)
-    assert first[0].source_sequences == [7, 8, 9]
+    assert first[0].event_id == PROGRESS_ID
+    assert first[0].source_sequences == [8]
+    assert first[0].current == 1
+    assert first[0].total == 3
 
 
 def test_progress_without_source_sequence_is_not_published() -> None:
+    progress = AgentProgressStreamEvent(
+        progress_id=PROGRESS_ID,
+        operation="policy_retrieval",
+        status=AgentProgressStatus.STARTED,
+    )
+    events = _projector().process(
+        {
+            "type": "custom",
+            "data": progress.model_dump(mode="json"),
+        }
+    )
+
+    assert events == []
+
+
+def test_duplicate_progress_is_published_once() -> None:
+    progress = AgentProgressStreamEvent(
+        progress_id=PROGRESS_ID,
+        operation="policy_retrieval",
+        status=AgentProgressStatus.STARTED,
+    )
+    projector = _projector()
+    raw_event = {"type": "custom", "data": progress.model_dump(mode="json")}
+
+    first = projector.process(raw_event, source_sequence=1)
+    replayed = projector.process(raw_event, source_sequence=2)
+
+    assert len(first) == 1
+    assert replayed == []
+
+
+def test_unknown_custom_event_kind_is_not_published() -> None:
     events = _projector().process(
         {
             "type": "custom",
             "data": {
-                "type": "progress",
-                "operation": "policy_retrieval",
-                "status": "started",
+                "kind": "agent.unknown",
+                "schema_version": "1",
             },
-        }
+        },
+        source_sequence=1,
+    )
+
+    assert events == []
+
+
+def test_invalid_progress_custom_event_is_not_published() -> None:
+    events = _projector().process(
+        {
+            "type": "custom",
+            "data": {
+                "kind": AgentCustomStreamEventKind.PROGRESS.value,
+                "schema_version": "1",
+                "progress_id": "",
+                "operation": "policy_retrieval",
+                "status": AgentProgressStatus.STARTED.value,
+            },
+        },
+        source_sequence=1,
     )
 
     assert events == []

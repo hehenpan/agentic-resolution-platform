@@ -7,13 +7,14 @@ from uuid import UUID, uuid5
 from loguru import logger
 from pydantic import ValidationError
 from shared_common.schemas.ai_agent import (
+    AgentCustomStreamEventKind,
     AgentDomainEvent,
     AgentDomainEventKind,
     AgentError,
     AgentOutput,
     AgentOutputProduced,
     AgentProgressReported,
-    AgentProgressStatus,
+    AgentProgressStreamEvent,
     AgentResumeCursor,
     AgentRunCompleted,
     AgentRunFailed,
@@ -51,6 +52,7 @@ class AgentRunProjector:
         self._clock = clock
         self._next_sequence = 0
         self._published_output_ids: set[str] = set()
+        self._published_progress_ids: set[str] = set()
         self._published_interrupt_ids: set[str] = set()
         self._outputs: dict[str, AgentOutput] = {}
         self._resume_cursor: AgentResumeCursor | None = None
@@ -73,7 +75,7 @@ class AgentRunProjector:
             return self._publish_outputs(data, source_sequence)
 
         if event_type == "custom":
-            return self._project_progress(data, source_sequence)
+            return self._project_custom_event(data, source_sequence)
 
         return []
 
@@ -156,50 +158,42 @@ class AgentRunProjector:
             self._published_output_ids.add(output.output_id)
         return events
 
-    def _project_progress(
+    def _project_custom_event(
         self,
         value: object,
         source_sequence: int | None,
     ) -> list[AgentDomainEvent]:
-        if not isinstance(value, Mapping) or value.get("type") != "progress":
+        if not isinstance(value, Mapping):
+            logger.error("Agent custom stream event is not a mapping; skipping")
+            return []
+        kind = value.get("kind")
+        if kind != AgentCustomStreamEventKind.PROGRESS.value:
+            logger.error(f"Unknown agent custom stream event kind; skipping: {kind}")
             return []
         if source_sequence is None:
             logger.error("Agent progress event has no raw source sequence; skipping")
             return []
 
-        operation = value.get("operation")
-        status = value.get("status")
-        if not isinstance(operation, str) or not isinstance(status, str):
-            logger.error(
-                "Agent progress event is missing operation or status; skipping"
-            )
-            return []
-
-        source_sequences = self._normalize_source_sequences(
-            value.get("source_sequences"),
-            source_sequence,
-        )
-        details = value.get("details", {})
         try:
+            progress = AgentProgressStreamEvent.model_validate(value)
+            if progress.progress_id in self._published_progress_ids:
+                return []
             event = AgentProgressReported(
-                event_id=build_event_id(
-                    AgentDomainEventKind.PROGRESS_REPORTED,
-                    self._thread_id,
-                    self._progress_subject(operation, status, source_sequences),
-                ),
+                event_id=progress.progress_id,
                 thread_id=self._thread_id,
                 sequence=self._take_sequence(),
-                source_sequences=source_sequences,
+                source_sequences=[source_sequence],
                 created_at=self._clock(),
-                operation=operation,
-                status=AgentProgressStatus(status),
-                current=value.get("current"),
-                total=value.get("total"),
-                details=details,
+                operation=progress.operation,
+                status=progress.status,
+                current=progress.progress_current,
+                total=progress.progress_total,
+                details=progress.details,
             )
-        except (ValueError, ValidationError) as error:
+        except ValidationError as error:
             logger.error(f"Invalid agent progress event; skipping: {error}")
             return []
+        self._published_progress_ids.add(event.event_id)
         return [event]
 
     def _publish_interrupts(
@@ -340,29 +334,6 @@ class AgentRunProjector:
         except ValidationError as error:
             logger.error(f"Invalid human input request; skipping: {error}")
             return None
-
-    @staticmethod
-    def _normalize_source_sequences(
-        value: object,
-        fallback: int,
-    ) -> list[int]:
-        source_sequences = {fallback}
-        if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
-            source_sequences.update(
-                item
-                for item in value
-                if isinstance(item, int) and not isinstance(item, bool)
-            )
-        return sorted(source_sequences)
-
-    @staticmethod
-    def _progress_subject(
-        operation: str,
-        status: str,
-        source_sequences: Sequence[int],
-    ) -> str:
-        sources = ",".join(str(item) for item in source_sequences)
-        return f"{operation}:{status}:{sources}"
 
     def _terminal_subject(self, terminal: str) -> str:
         checkpoint_id = (

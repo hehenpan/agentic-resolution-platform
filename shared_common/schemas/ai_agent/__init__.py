@@ -1,10 +1,15 @@
 """Public schemas shared by the AI Agent and its consumers."""
 
 from shared_common.schemas.ai_agent.enums import (
+    AgentCustomStreamEventKind,
     AgentDomainEventKind,
     AgentOutputPartKind,
     AgentProgressStatus,
     AgentSourceType,
+)
+from shared_common.schemas.ai_agent.custom_stream_events import (
+    AgentCustomStreamEventBase,
+    AgentProgressStreamEvent,
 )
 from shared_common.schemas.ai_agent.events import (
     AgentDomainEvent,
@@ -45,6 +50,8 @@ __all__ = [
     "AgentDomainEvent",
     "AgentDomainEventBase",
     "AgentDomainEventKind",
+    "AgentCustomStreamEventBase",
+    "AgentCustomStreamEventKind",
     "AgentError",
     "AgentOutput",
     "AgentOutputPart",
@@ -52,6 +59,7 @@ __all__ = [
     "AgentOutputSchemaId",
     "AgentOutputProduced",
     "AgentProgressReported",
+    "AgentProgressStreamEvent",
     "AgentProgressStatus",
     "AgentRAGFileImportRequest",
     "AgentResumeCursor",
