@@ -11,24 +11,33 @@ from shared_common.schemas.ai_agent.human_input import (
 class UserMessageInput(BaseModel):
     """Represent one user message submitted to the agent service."""
 
-    content: str
-    metadata: dict[str, JsonValue] = Field(default_factory=dict)
+    content: str = Field(description="Plain text content submitted by the user.")
+    metadata: dict[str, JsonValue] = Field(
+        default_factory=dict,
+        description="Optional user message metadata forwarded to the agent run.",
+    )
 
 
 class AgentTurnRequest(BaseModel):
     """Request one ordinary turn in an existing agent thread."""
 
-    thread_id: str
-    message: UserMessageInput
+    thread_id: str = Field(description="Agent thread ID for the conversation.")
+    message: UserMessageInput = Field(
+        description="User message payload for this agent turn."
+    )
 
 
 class AgentResumeRequest(BaseModel):
     """Request resumption of an interrupted agent execution stage."""
 
-    thread_id: str
-    interrupt_id: str
-    resume_cursor: AgentResumeCursor
-    response: HumanInputResponse
+    thread_id: str = Field(description="Agent thread ID that owns the interrupt.")
+    interrupt_id: str = Field(description="LangGraph interrupt ID to resume.")
+    resume_cursor: AgentResumeCursor = Field(
+        description="Checkpoint cursor used to resume the interrupted run."
+    )
+    response: HumanInputResponse = Field(
+        description="Human response payload used as the resume value."
+    )
 
 
 class RAGFileImportPayload(BaseModel):

@@ -1,6 +1,10 @@
-import os
+"""Load AI Agent settings from the active configuration file."""
+
 import configparser
+import os
 from pathlib import Path
+
+from loguru import logger
 
 # Get project base directory path (ai_agent/src/agent/core/ -> ai_agent)
 BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent
@@ -19,14 +23,18 @@ else:
 
 CONFIG_FILE_PATH = str(CONFIG_FILE_PATH)
 
-class Settings(object):
-    """
-    Application settings parsed from config.ini.
-    """
-    def __init__(self, config_path: str, app_env: str):
+class Settings:
+    """Application settings parsed from config.ini."""
+
+    def __init__(self, config_path: str, app_env: str) -> None:
+        """Load settings for the requested application environment."""
         self.APP_ENV = app_env
         self._config = configparser.ConfigParser()
         if not os.path.exists(config_path):
+            logger.error(
+                "AI Agent configuration file does not exist: config_path={}",
+                config_path,
+            )
             raise FileNotFoundError(f"Configuration file not found at: {config_path}")
         self._config.read(config_path, encoding="utf-8")
 

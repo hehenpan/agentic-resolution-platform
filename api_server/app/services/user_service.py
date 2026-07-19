@@ -26,6 +26,7 @@ class UserService(object):
             return True
         except Exception as e:
             self.dbsession.rollback()
+            logger.exception("Failed to create user: email={}", email)
             raise e
         
 
@@ -44,6 +45,7 @@ class UserService(object):
         
         user = self.dbsession.query(User).filter(User.email == email).first()
         if not user:
+            logger.error("Cannot create session for unknown user: email={}", email)
             raise ValueError(f"User with email {email} not found when creating session")
 
         session_info = SessionInfo()
@@ -72,4 +74,3 @@ class UserService(object):
         if session_info.status != SessionStatus.ACTIVE:
             return None
         return session_info
-        

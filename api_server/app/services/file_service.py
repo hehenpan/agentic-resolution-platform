@@ -5,7 +5,6 @@ from app.models.models import FileInfo, FileStatus, FileSyncStatus, FileStorageT
 from utils.commons import generate_uuid_hex, get_current_ts
 from app.core.config import settings
 from loguru import logger
-from starlette_context import context
 from app.core.mq_task import get_mq_task_manager, MQMessageUploadFileFinish, MSGMetaData, MSGContextData
 from app.core.context import get_request_id
 
@@ -16,12 +15,24 @@ class FileRawDataStorageBase(object):
         pass
 
     def save(self, fileinfo: FileInfo, content):
+        logger.error(
+            f"FileRawDataStorageBase.save is not implemented: "
+            f"file_id={fileinfo.file_id}"
+        )
         raise Exception("Not Implemented")
         
     def delete(self, fileinfo: FileInfo):
+        logger.error(
+            f"FileRawDataStorageBase.delete is not implemented: "
+            f"file_id={fileinfo.file_id}"
+        )
         raise Exception("Not Implemented")
 
     def load(self, fileinfo: FileInfo):
+        logger.error(
+            f"FileRawDataStorageBase.load is not implemented: "
+            f"file_id={fileinfo.file_id}"
+        )
         raise Exception("Not Implemented")
 
 
@@ -56,6 +67,10 @@ class LocalFileRawDataStorage(FileRawDataStorageBase):
         """Read and return file bytes from local disk storage."""
         file_path = os.path.join(settings.STORAGE_DIR, fileinfo.file_storage_location)
         if not os.path.exists(file_path):
+            logger.error(
+                f"File raw data does not exist: file_id={fileinfo.file_id}, "
+                f"file_path={file_path}"
+            )
             raise FileNotFoundError(f"File raw data not found at: {file_path}")
         try:
             with open(file_path, "rb") as f:
@@ -72,15 +87,24 @@ class S3FileRawDataStorage(FileRawDataStorageBase):
 
     def save(self, fileinfo: FileInfo, content: bytes):
         """Save file bytes to S3."""
+        logger.error(
+            f"S3 file save is not implemented: file_id={fileinfo.file_id}"
+        )
         raise Exception("Not Implemented")
         
 
     def delete(self, fileinfo: FileInfo):
         """Delete file from S3."""
+        logger.error(
+            f"S3 file deletion is not implemented: file_id={fileinfo.file_id}"
+        )
         raise Exception("Not Implemented")
 
     def load(self, fileinfo: FileInfo) -> bytes:
         """Read file bytes from S3."""
+        logger.error(
+            f"S3 file loading is not implemented: file_id={fileinfo.file_id}"
+        )
         raise Exception("Not Implemented")
 
 def create_file_raw_data_storage(storage_type: FileStorageType=None) -> FileRawDataStorageBase:
@@ -91,6 +115,10 @@ def create_file_raw_data_storage(storage_type: FileStorageType=None) -> FileRawD
         elif storage_type_str == "local":
             storage_type = FileStorageType.LOCAL
         else:
+            logger.error(
+                f"Unsupported file storage type in settings: "
+                f"storage_type={storage_type_str}"
+            )
             raise ValueError(f"Unsupported storage type in settings: {storage_type_str}")
 
         
@@ -99,6 +127,7 @@ def create_file_raw_data_storage(storage_type: FileStorageType=None) -> FileRawD
     elif storage_type == FileStorageType.S3:
         return S3FileRawDataStorage()
     else:
+        logger.error(f"Unsupported file storage type: storage_type={storage_type}")
         raise ValueError(f"Unsupported storage type: {storage_type}")
 
 
@@ -168,6 +197,7 @@ class FileService(object):
         """
         file_info = self.dbsession.query(FileInfo).filter(FileInfo.file_id == file_id).first()
         if not file_info:
+            logger.error(f"Cannot activate missing FileInfo record: file_id={file_id}")
             raise ValueError(f"FileInfo record not found for file_id={file_id}")
 
         file_info.status = FileStatus.ACTIVE
@@ -278,4 +308,3 @@ class FileService(object):
             msg=msg,
         )
         logger.info(f"Successfully sent upload finish event for file_id={file_info.file_id}")
-

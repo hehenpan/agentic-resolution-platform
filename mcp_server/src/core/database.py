@@ -1,5 +1,6 @@
 from contextlib import contextmanager
 from typing import Generator
+from loguru import logger
 from sqlmodel import create_engine, Session, SQLModel
 from config import settings, BASE_DIR
 
@@ -35,6 +36,7 @@ def get_session() -> Generator[Session, None, None]:
         session.commit()
     except Exception:
         session.rollback()
+        logger.exception("Database session transaction failed and was rolled back")
         raise
     finally:
         session.close()

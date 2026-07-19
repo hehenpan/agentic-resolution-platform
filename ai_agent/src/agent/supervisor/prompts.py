@@ -13,7 +13,10 @@ class SupervisorRoutingPromptInput(BaseModel):
         str_strip_whitespace=True,
     )
 
-    question: str = Field(min_length=1)
+    question: str = Field(
+        min_length=1,
+        description="Customer request text used for supervisor routing.",
+    )
 
 
 SUPERVISOR_ROUTING_PROMPT = ChatPromptTemplate.from_messages(

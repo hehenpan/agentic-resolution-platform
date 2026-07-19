@@ -13,8 +13,14 @@ class PolicyDraftPromptInput(BaseModel):
         str_strip_whitespace=True,
     )
 
-    question: str = Field(min_length=1)
-    context: str = Field(min_length=1)
+    question: str = Field(
+        min_length=1,
+        description="Customer policy question to answer.",
+    )
+    context: str = Field(
+        min_length=1,
+        description="Retrieved policy excerpts supplied to the draft LLM.",
+    )
 
 
 POLICY_DRAFT_PROMPT = ChatPromptTemplate.from_messages(
