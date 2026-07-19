@@ -2,6 +2,8 @@ import os
 import configparser
 from pathlib import Path
 
+from loguru import logger
+
 # Get project base directory path (mcp_server root directory)
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -28,6 +30,10 @@ class Settings(object):
         self.APP_ENV = app_env
         self._config = configparser.ConfigParser()
         if not os.path.exists(config_path):
+            logger.error(
+                "MCP Server configuration file does not exist: config_path={}",
+                config_path,
+            )
             raise FileNotFoundError(f"Configuration file not found at: {config_path}")
         self._config.read(config_path, encoding="utf-8")
 

@@ -33,26 +33,47 @@ class SupervisorGraphNames(str, Enum):
 class SupervisorState(BaseModel):
     """Represent shared conversation state managed by the supervisor."""
 
-    messages: Annotated[list[AnyMessage], add_messages] = Field(default_factory=list)
-    outputs: Annotated[list[AgentOutput], operator.add] = Field(default_factory=list)
-    route: SelectRouteRoute | None = None
+    messages: Annotated[list[AnyMessage], add_messages] = Field(
+        default_factory=list,
+        description="Conversation messages accumulated by the supervisor graph.",
+    )
+    outputs: Annotated[list[AgentOutput], operator.add] = Field(
+        default_factory=list,
+        description="Domain outputs accumulated during the supervisor run.",
+    )
+    route: SelectRouteRoute | None = Field(
+        default=None,
+        description="Route selected for the current supervisor turn.",
+    )
 
 
 class SupervisorDecision(BaseModel):
     """Constrain the route selected by the supervisor LLM."""
 
-    route: SelectRouteRoute
+    route: SelectRouteRoute = Field(
+        description="Route selected by the supervisor LLM."
+    )
 
 
 class RouteRequestUpdate(BaseModel):
     """Represent the state update returned by route_request."""
 
-    route: SelectRouteRoute
+    route: SelectRouteRoute = Field(
+        description="Route selected for the incoming request."
+    )
 
 
 class SupervisorOutput(BaseModel):
     """Represent the externally relevant supervisor graph output."""
 
-    messages: list[BaseMessage]
-    outputs: list[AgentOutput] = Field(default_factory=list)
-    route: SelectRouteRoute | None = None
+    messages: list[BaseMessage] = Field(
+        description="Conversation messages exposed by the supervisor graph."
+    )
+    outputs: list[AgentOutput] = Field(
+        default_factory=list,
+        description="Domain outputs exposed by the supervisor graph.",
+    )
+    route: SelectRouteRoute | None = Field(
+        default=None,
+        description="Final route selected for the supervisor turn.",
+    )

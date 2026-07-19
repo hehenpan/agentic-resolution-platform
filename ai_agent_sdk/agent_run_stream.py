@@ -34,13 +34,21 @@ AGENT_STREAM_MODES: tuple[StreamMode, ...] = (
 
 
 class _AgentUserMessageInput(BaseModel):
-    role: str = "user"
-    content: str
-    additional_kwargs: dict[str, JsonValue] = Field(default_factory=dict)
+    role: str = Field(
+        default="user",
+        description="LangChain chat role for the submitted message.",
+    )
+    content: str = Field(description="Plain text content for the user message.")
+    additional_kwargs: dict[str, JsonValue] = Field(
+        default_factory=dict,
+        description="Additional LangChain message metadata.",
+    )
 
 
 class _AgentSupervisorInput(BaseModel):
-    messages: list[_AgentUserMessageInput]
+    messages: list[_AgentUserMessageInput] = Field(
+        description="Messages submitted to the supervisor graph."
+    )
 
 
 class AgentRunStream:

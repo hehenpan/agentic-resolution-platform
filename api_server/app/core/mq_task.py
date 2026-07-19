@@ -5,7 +5,7 @@ from enum import Enum
 from typing import Literal
 
 from loguru import logger
-from pydantic import BaseModel, JsonValue
+from pydantic import BaseModel, Field, JsonValue
 
 from app.models.engines import get_session
 from app.services.rag_file_import_service import RAGFileImportService
@@ -22,33 +22,46 @@ class EventType(str, Enum):
 
 
 class MSGContextData(BaseModel):
-    request_id: str
-    extra_context: dict[str, JsonValue]
+    request_id: str = Field(description="Request ID associated with the MQ event.")
+    extra_context: dict[str, JsonValue] = Field(
+        description="Additional execution context carried by the MQ event."
+    )
 
 
 class MSGMetaData(BaseModel):
-    producer_svc_name: str
-    produce_time_ts: int
-    operator_user_id: int
-    extra_meta: dict[str, JsonValue]
+    producer_svc_name: str = Field(
+        description="Service name that produced the MQ event."
+    )
+    produce_time_ts: int = Field(
+        description="Unix timestamp when the MQ event was produced."
+    )
+    operator_user_id: int = Field(
+        description="User ID of the operator that triggered the event."
+    )
+    extra_meta: dict[str, JsonValue] = Field(
+        description="Additional metadata carried by the MQ event."
+    )
 
 
 class MQMessageBase(BaseModel):
-    topic_name: str
-    partition_key: str
-    event_type: str
-    meta_data: MSGMetaData
-    context_data: MSGContextData
+    topic_name: str = Field(description="Topic name for the MQ message.")
+    partition_key: str = Field(description="Partition key for message ordering.")
+    event_type: str = Field(description="Business event type carried by the message.")
+    meta_data: MSGMetaData = Field(description="MQ message metadata.")
+    context_data: MSGContextData = Field(description="MQ message context data.")
 
 
 class MQMessageUploadFileFinish(MQMessageBase):
-    event_type: Literal[EventType.UPLOAD_FILE_FINISH] = EventType.UPLOAD_FILE_FINISH
-    file_id: int
-    file_name: str
-    file_type: str
-    file_size: int
-    file_content: bytes
-    tenant_id: int
+    event_type: Literal[EventType.UPLOAD_FILE_FINISH] = Field(
+        default=EventType.UPLOAD_FILE_FINISH,
+        description="Upload completion event type.",
+    )
+    file_id: int = Field(description="Uploaded file ID.")
+    file_name: str = Field(description="Uploaded file name.")
+    file_type: str = Field(description="Uploaded file type.")
+    file_size: int = Field(description="Uploaded file size in bytes.")
+    file_content: bytes = Field(description="Uploaded file content bytes.")
+    tenant_id: int = Field(description="Tenant ID that owns the uploaded file.")
 
 
 class MQTaskManagerBase:
@@ -58,6 +71,10 @@ class MQTaskManagerBase:
         partition_key: str,
         msg: MQMessageBase,
     ) -> None:
+        logger.error(
+            f"MQTaskManagerBase.send_message is not implemented: "
+            f"topic={topic}, partition_key={partition_key}"
+        )
         raise NotImplementedError("Method not implemented")
 
 
@@ -72,6 +89,10 @@ class MQTaskManagerImpLocal(MQTaskManagerBase):
             case MQMessageUploadFileFinish():
                 asyncio.create_task(self.local_task_upload_file_finish(msg))
             case _:
+                logger.error(
+                    f"Unknown MQ event type: event_type={msg.event_type}, "
+                    f"topic={topic}, partition_key={partition_key}"
+                )
                 raise ValueError(f"Unknown event type: {msg.event_type}")
 
     async def local_task_upload_file_finish(

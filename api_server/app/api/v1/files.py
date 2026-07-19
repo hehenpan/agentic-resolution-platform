@@ -1,12 +1,12 @@
 from fastapi import APIRouter, status, Depends, HTTPException, UploadFile, File, Response
 from pydantic import ValidationError
 from app.api.deps import get_current_user, get_file_service, get_rbac_service
-from app.models.models import User, UserType
+from app.models.models import User
 from app.services.file_service import FileService
 from loguru import logger
 from app.services.rbac_service import RBACServiceBase, Permission
 from app.schemas.common import ResponseBase, BizCode
-from app.schemas.files import FileDownloadRequest, FileListResponse, FileListResponseData
+from app.schemas.files import FileDownloadRequest, FileListResponse
 from utils.commons import get_bytes_md5
 
 file_router = APIRouter()
@@ -31,6 +31,10 @@ async def upload_file(
         permission=Permission.USER_MANAGE,
         resource_tenant_id=current_user.tenant_id
     ):
+        logger.error(
+            f"File upload permission denied: user_id={current_user.user_id}, "
+            f"tenant_id={current_user.tenant_id}"
+        )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Permission denied"
@@ -38,6 +42,10 @@ async def upload_file(
 
     # Enforce filename extension constraints
     if not file_service.validate_filename(file.filename):
+        logger.error(
+            f"File upload rejected because its format is unsupported: "
+            f"file_name={file.filename}, user_id={current_user.user_id}"
+        )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Unsupported file format. Only txt, md, and pdf are allowed."
@@ -46,6 +54,10 @@ async def upload_file(
     try:
         content = await file.read()
     except Exception as e:
+        logger.exception(
+            f"Failed to read uploaded file: file_name={file.filename}, "
+            f"user_id={current_user.user_id}, error={e}"
+        )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Failed to read upload file: {str(e)}"
@@ -65,6 +77,10 @@ async def upload_file(
             file_md5_hash=md5_hash
         )
     except Exception as e:
+        logger.exception(
+            f"Failed to create file index: file_name={file.filename}, "
+            f"user_id={current_user.user_id}, error={e}"
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to create file index: {str(e)}"
@@ -84,6 +100,10 @@ async def upload_file(
         file_info = file_service.activate_file_index(file_info.file_id)
 
     except Exception as e:
+        logger.exception(
+            f"Failed to store file content or activate file index: "
+            f"file_id={file_info.file_id}, error={e}"
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to save file content or activate index: {str(e)}"
@@ -125,6 +145,10 @@ async def list_files(
         permission=Permission.USER_READ,
         resource_tenant_id=current_user.tenant_id
     ):
+        logger.error(
+            f"File list permission denied: user_id={current_user.user_id}, "
+            f"tenant_id={current_user.tenant_id}"
+        )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Permission denied"
@@ -178,6 +202,10 @@ async def download_file(
     try:
         FileDownloadRequest(file_id=file_id)
     except ValidationError as e:
+        logger.error(
+            f"File download request validation failed: file_id={file_id}, "
+            f"error={e}"
+        )
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=e.errors()
@@ -189,6 +217,11 @@ async def download_file(
         permission=Permission.USER_READ,
         resource_tenant_id=current_user.tenant_id
     ):
+        logger.error(
+            f"File download permission denied: file_id={file_id}, "
+            f"user_id={current_user.user_id}, "
+            f"tenant_id={current_user.tenant_id}"
+        )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Permission denied"
@@ -197,6 +230,7 @@ async def download_file(
     # Retrieve file info
     file_info = file_service.get_file_info(file_id)
     if not file_info:
+        logger.error(f"Requested file does not exist: file_id={file_id}")
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="File not found"
@@ -208,6 +242,12 @@ async def download_file(
         permission=Permission.USER_READ, 
         resource_tenant_id=file_info.tenant_id,
     ):
+        logger.error(
+            f"Cross-tenant file download permission denied: file_id={file_id}, "
+            f"user_id={current_user.user_id}, "
+            f"user_tenant_id={current_user.tenant_id}, "
+            f"file_tenant_id={file_info.tenant_id}"
+        )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Permission denied"
@@ -233,4 +273,3 @@ async def download_file(
         "Content-Disposition": f'attachment; filename="{file_info.file_name}"'
     }
     return Response(content=content, media_type="application/octet-stream", headers=headers)
-

@@ -14,30 +14,40 @@ from agent.core.qdrant import get_qdrant_client
 class RAGFileVectorPayload(BaseModel):
     """Represent metadata stored with an embedded RAG file chunk."""
 
-    file_id: int
-    file_name: str
-    file_size: int
-    file_owner_id: int
-    file_tenant_id: int
-    text: str
-    extra_meta: dict[str, Any] = Field(default_factory=dict)
-    extra_context: dict[str, Any] = Field(default_factory=dict)
+    file_id: int = Field(description="Source file ID for the embedded chunk.")
+    file_name: str = Field(description="Source file name for citation display.")
+    file_size: int = Field(description="Source file size in bytes.")
+    file_owner_id: int = Field(description="User ID that owns the source file.")
+    file_tenant_id: int = Field(description="Tenant ID that owns the source file.")
+    text: str = Field(description="Raw text content embedded into this vector.")
+    extra_meta: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Additional metadata stored with the vector payload.",
+    )
+    extra_context: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Additional execution context stored with the vector payload.",
+    )
 
 
 class VectorPoint(BaseModel):
     """Represent a database-agnostic vector database record."""
 
-    id: int | str | UUID
-    vector: list[float]
-    payload: BaseModel | dict[str, Any]
+    id: int | str | UUID = Field(description="Unique point ID in the vector store.")
+    vector: list[float] = Field(description="Embedding vector values for the point.")
+    payload: BaseModel | dict[str, Any] = Field(
+        description="Structured payload stored alongside the vector."
+    )
 
 
 class VectorSearchResult(BaseModel):
     """Represent a database-agnostic vector search result."""
 
-    id: int | str | UUID
-    score: float
-    payload: dict[str, Any]
+    id: int | str | UUID = Field(description="Matched vector point ID.")
+    score: float = Field(description="Similarity score returned by the vector store.")
+    payload: dict[str, Any] = Field(
+        description="Payload returned with the matched vector point."
+    )
 
 
 class VectorDB(ABC):

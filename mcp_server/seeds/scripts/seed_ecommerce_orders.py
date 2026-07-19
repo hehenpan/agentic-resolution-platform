@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 from loguru import logger
 import pandas as pd
 import sys
@@ -8,9 +7,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Iterator
 
-from sqlmodel import Session, select
+from sqlmodel import Session
 
-LOGGER = logging.getLogger(__name__)
 MCP_ROOT = Path(__file__).resolve().parents[2]
 MCP_SRC_DIR = MCP_ROOT / "src"
 
@@ -99,6 +97,11 @@ def load_orders(csv_path: Path = ORDERS_CSV) -> list[OrderSeedRow]:
     required_cols = ["order_id", "user_id", "email", "status", "total_amount", "created_ts"]
     missing_cols = [col for col in required_cols if col not in df.columns]
     if missing_cols:
+        logger.error(
+            "Orders CSV is missing required columns: path={}, columns={}",
+            csv_path,
+            missing_cols,
+        )
         raise ValueError(f"Missing columns in orders CSV: {missing_cols}")
     df = df.dropna(subset=required_cols)
 
@@ -129,6 +132,11 @@ def load_order_items(csv_path: Path = ORDER_ITEMS_CSV) -> list[OrderItemSeedRow]
     required_cols = ["item_id", "order_id", "sku_id", "sku_code", "name", "quantity", "price"]
     missing_cols = [col for col in required_cols if col not in df.columns]
     if missing_cols:
+        logger.error(
+            "Order items CSV is missing required columns: path={}, columns={}",
+            csv_path,
+            missing_cols,
+        )
         raise ValueError(f"Missing columns in order items CSV: {missing_cols}")
     df = df.dropna(subset=required_cols)
 
@@ -169,6 +177,11 @@ def load_shipments(csv_path: Path = SHIPMENTS_CSV) -> list[ShipmentSeedRow]:
     ]
     missing_cols = [col for col in required_cols if col not in df.columns]
     if missing_cols:
+        logger.error(
+            "Shipments CSV is missing required columns: path={}, columns={}",
+            csv_path,
+            missing_cols,
+        )
         raise ValueError(f"Missing columns in shipments CSV: {missing_cols}")
     df = df.dropna(subset=required_cols)
 
@@ -201,6 +214,11 @@ def load_shipment_events(csv_path: Path = SHIPMENT_EVENTS_CSV) -> list[ShipmentE
     required_cols = ["event_id", "shipment_id", "order_id", "status", "location", "description", "event_ts"]
     missing_cols = [col for col in required_cols if col not in df.columns]
     if missing_cols:
+        logger.error(
+            "Shipment events CSV is missing required columns: path={}, columns={}",
+            csv_path,
+            missing_cols,
+        )
         raise ValueError(f"Missing columns in shipment events CSV: {missing_cols}")
     df = df.dropna(subset=required_cols)
 

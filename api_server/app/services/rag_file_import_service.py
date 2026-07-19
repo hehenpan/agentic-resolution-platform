@@ -40,6 +40,9 @@ def build_rag_file_import_thread_id(
 ) -> str:
     """Build a thread ID using the current millisecond identity seed."""
     if not operation_id.strip():
+        logger.error(
+            f"RAG file import operation ID is empty: file_id={file_id}"
+        )
         raise ValueError("RAG file import operation ID must not be empty")
 
     timestamp_ms = _unix_time_ms()
@@ -53,11 +56,26 @@ class RAGFileImportError(RuntimeError):
 
 
 class _RAGFileImportStreamState(BaseModel):
-    result: RAGFileImportResult | None = None
-    output_id: str | None = None
-    terminal: AgentRunCompleted | AgentRunInterrupted | AgentRunFailed | None = None
-    human_input_requested: bool = False
-    protocol_errors: list[str] = Field(default_factory=list)
+    result: RAGFileImportResult | None = Field(
+        default=None,
+        description="Validated RAG file import result extracted from the stream.",
+    )
+    output_id: str | None = Field(
+        default=None,
+        description="Agent output ID that carried the import result.",
+    )
+    terminal: AgentRunCompleted | AgentRunInterrupted | AgentRunFailed | None = Field(
+        default=None,
+        description="Terminal agent run event observed from the stream.",
+    )
+    human_input_requested: bool = Field(
+        default=False,
+        description="Whether the stream requested human input.",
+    )
+    protocol_errors: list[str] = Field(
+        default_factory=list,
+        description="Protocol validation errors observed while consuming the stream.",
+    )
 
 
 class RAGFileImportService:
@@ -180,22 +198,41 @@ class RAGFileImportService:
         state: _RAGFileImportStreamState,
     ) -> RAGFileImportResult:
         if state.protocol_errors:
+            logger.error(
+                f"RAG file import stream contains protocol errors: "
+                f"errors={state.protocol_errors}"
+            )
             raise RAGFileImportError("; ".join(state.protocol_errors))
         if state.human_input_requested:
+            logger.error("RAG file import stream requested unsupported human input")
             raise RAGFileImportError("RAG file import requested unsupported human input")
         if state.terminal is None:
+            logger.error("RAG file import stream ended without a terminal event")
             raise RAGFileImportError("RAG file import stream ended without a terminal event")
         if isinstance(state.terminal, AgentRunFailed):
+            logger.error(
+                f"AI Agent reported a failed RAG file import: "
+                f"error_code={state.terminal.error.code}"
+            )
             raise RAGFileImportError(
                 f"AI Agent failed the RAG file import: {state.terminal.error.code}"
             )
         if isinstance(state.terminal, AgentRunInterrupted):
+            logger.error("RAG file import stream was interrupted")
             raise RAGFileImportError("RAG file import was interrupted")
         if state.result is None or state.output_id is None:
+            logger.error(
+                "RAG file import completed without a structured result or output ID"
+            )
             raise RAGFileImportError(
                 "RAG file import completed without a structured result"
             )
         if state.output_id not in state.terminal.output_ids:
+            logger.error(
+                f"RAG file import completion does not reference its result: "
+                f"output_id={state.output_id}, "
+                f"completed_output_ids={state.terminal.output_ids}"
+            )
             raise RAGFileImportError(
                 "RAG file import completion does not reference its result output"
             )

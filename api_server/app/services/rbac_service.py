@@ -1,3 +1,5 @@
+from loguru import logger
+
 from app.models.models import User, UserType, UserStatus
 
 class Permission:
@@ -39,6 +41,10 @@ class RBACServiceBase(object):
         pass
 
     def has_permission(self, user: User, permission: str, resource_tenant_id: int = None) -> bool:
+        logger.error(
+            "RBACServiceBase.has_permission must be implemented: permission={}",
+            permission,
+        )
         raise NotImplementedError("Method not implemented")
 
 class RBACServiceSimple(RBACServiceBase):

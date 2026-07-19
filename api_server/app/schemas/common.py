@@ -1,7 +1,7 @@
 from typing import Any
-from pydantic import BaseModel
 from enum import IntEnum
 
+from pydantic import BaseModel, Field
 
 
 class BizCode(IntEnum):
@@ -16,6 +16,12 @@ class BizCode(IntEnum):
 
 
 class ResponseBase(BaseModel):
-    code: BizCode
-    message: str = ""
-    data: dict[str, Any] = {} 
+    code: BizCode = Field(description="Business status code for the response.")
+    message: str = Field(
+        default="",
+        description="Human-readable response message.",
+    )
+    data: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Response payload data.",
+    )
