@@ -14,6 +14,7 @@ class SelectRouteRoute(str, Enum):
     """Define branches returned by the select_route function."""
 
     POLICY_QA = "policy_qa"
+    ECOMMERCE_QUERY = "ecommerce_query"
 
 
 class SupervisorNodeNames(str, Enum):
@@ -21,6 +22,7 @@ class SupervisorNodeNames(str, Enum):
 
     ROUTE_REQUEST = "route_request"
     POLICY_QA = "policy_qa"
+    ECOMMERCE_QUERY = "ecommerce_query"
 
 
 class SupervisorGraphNames(str, Enum):
@@ -28,6 +30,7 @@ class SupervisorGraphNames(str, Enum):
 
     SUPERVISOR = "supervisor_graph"
     POLICY_QA = "policy_qa_graph"
+    ECOMMERCE_QUERY = "ecommerce_query_graph"
 
 
 class SupervisorState(BaseModel):

@@ -95,7 +95,8 @@ def test_agent_resume_request_round_trips() -> None:
             checkpoint_map={"parent": "checkpoint-parent"},
         ),
         response=HumanInputResponse(
-            data={
+            schema_id="human_input.approve_action.v1",
+            response_data={
                 "approved": True,
                 "note": "Proceed with the request.",
             }
@@ -145,7 +146,10 @@ def test_agent_resume_request_rejects_non_json_response() -> None:
             thread_id="thread-1",
             interrupt_id="interrupt-1",
             resume_cursor=AgentResumeCursor(checkpoint_id="checkpoint-1"),
-            response=HumanInputResponse(data=object()),
+            response=HumanInputResponse(
+                schema_id="human_input.approve_action.v1",
+                response_data=object(),
+            ),
         )
 
 

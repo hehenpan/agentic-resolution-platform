@@ -11,6 +11,8 @@ class AgentOutputKey(str, Enum):
 
     POLICY_QA_FINAL_RESPONSE = "policy_qa.final_response"
     RAG_FILE_IMPORT_RESULT = "rag_file_import.result"
+    ECOMMERCE_USER = "ecommerce.user"
+    ECOMMERCE_ORDERS = "ecommerce.orders"
 
 
 AGENT_OUTPUT_NAMESPACE = uuid5(

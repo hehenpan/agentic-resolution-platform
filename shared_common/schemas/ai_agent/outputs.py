@@ -72,6 +72,66 @@ class SourcesPart(BaseModel):
     )
 
 
+class ECommerceUserOutput(BaseModel):
+    """Represent the structured data output for a retrieved ecommerce user."""
+
+    exists: bool = Field(
+        description="Whether the customer was successfully found in the database."
+    )
+    user_id: int | None = Field(
+        default=None,
+        description="The unique database identifier of the customer, or null if not found."
+    )
+    email: str = Field(
+        description="The registered email address of the customer."
+    )
+    user_name: str | None = Field(
+        default=None,
+        description="The username or full name of the customer."
+    )
+
+
+class ECommerceOrderOutput(BaseModel):
+    """Represent a single ecommerce order in public agent output."""
+
+    order_id: int = Field(
+        description="The unique order identifier."
+    )
+    user_id: int = Field(
+        description="The unique customer identifier that owns the order."
+    )
+    email: str = Field(
+        description="The customer email address associated with the order."
+    )
+    status: int = Field(
+        ge=0,
+        le=4,
+        description=(
+            "Order status code exposed by the agent contract "
+            "(0: PENDING, 1: PAID, 2: SHIPPED, 3: COMPLETED, 4: CANCELLED)."
+        ),
+    )
+    total_amount: float = Field(
+        ge=0,
+        description="The total monetary amount of the order."
+    )
+    created_ts: int = Field(
+        description="The order creation timestamp as a Unix epoch integer."
+    )
+
+
+class ECommerceOrdersOutput(BaseModel):
+    """Represent the structured data output for a list of retrieved ecommerce orders."""
+
+    customer_email: str = Field(
+        description="The email address of the customer that owns the orders."
+    )
+    orders: list[ECommerceOrderOutput] = Field(
+        default_factory=list,
+        description="The list of orders belonging to the customer.",
+    )
+
+
 AgentOutputPart = Annotated[
     TextPart | StructuredDataPart | SourcesPart,
     Field(discriminator="kind"),

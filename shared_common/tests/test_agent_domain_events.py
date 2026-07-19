@@ -109,6 +109,7 @@ def _domain_events() -> list[
             **_event_fields(),
             interrupt_id="interrupt-1",
             request=HumanInputRequest(
+                schema_id="human_input.approve_action.v1",
                 prompt="Approve this action?",
                 input_schema={
                     "type": "object",
@@ -280,6 +281,7 @@ def test_human_input_request_and_resume_cursor_round_trip() -> None:
         **_event_fields(),
         interrupt_id="interrupt-1",
         request=HumanInputRequest(
+            schema_id="human_input.approve_action.v1",
             prompt="Provide a reason.",
             input_schema={"type": "string"},
             context={"order_id": "order-1"},
@@ -310,6 +312,7 @@ def test_human_input_request_and_resume_cursor_round_trip() -> None:
             **_event_fields(),
             interrupt_id="interrupt-1",
             request=HumanInputRequest(
+                schema_id="human_input.approve_action.v1",
                 prompt="Provide input.",
                 input_schema={"invalid": object()},
             ),

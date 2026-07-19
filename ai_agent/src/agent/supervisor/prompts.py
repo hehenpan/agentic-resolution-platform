@@ -27,6 +27,8 @@ SUPERVISOR_ROUTING_PROMPT = ChatPromptTemplate.from_messages(
             "specialist graph. Select policy_qa for questions about company "
             "policies, including delivery, returns, refunds, warranties, "
             "payments, privacy, or other documented customer policies. "
+            "Select ecommerce_query for queries asking to retrieve, check, or lookup "
+            "customer details, user profiles, customer accounts, or order lists. "
             "Return only the structured route requested by the schema.",
         ),
         ("human", "Customer request: {question}"),
