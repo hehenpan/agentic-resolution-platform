@@ -11,6 +11,7 @@ class HumanInputSchemaId(str, Enum):
     GET_ORDER_DETAILS_INPUT_V1 = "human_input.get_order_details.v1"
     GET_RETURNS_BY_ORDER_INPUT_V1 = "human_input.get_returns_by_order.v1"
     GET_RETURNS_BY_CUSTOMER_INPUT_V1 = "human_input.get_returns_by_customer.v1"
+    CREATE_RETURN_REQUEST_INPUT_V1 = "human_input.create_return_request.v1"
 
 
 class AgentOutputSchemaId(str, Enum):
@@ -24,3 +25,4 @@ class AgentOutputSchemaId(str, Enum):
     ECOMMERCE_RETURNS_BY_CUSTOMER_RESULT_V1 = (
         "ecommerce.returns_by_customer_result.v1"
     )
+    ECOMMERCE_CREATE_RETURN_RESULT_V1 = "ecommerce.create_return_result.v1"

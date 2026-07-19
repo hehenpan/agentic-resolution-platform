@@ -40,3 +40,23 @@ class AgentProgressStatus(str, Enum):
     STARTED = "started"
     IN_PROGRESS = "in_progress"
     COMPLETED = "completed"
+
+
+class AgentReturnReason(str, Enum):
+    """Identify return reason codes in agent contract."""
+
+    CHANGE_OF_MIND = "change_of_mind"
+    DAMAGED = "damaged"
+    WRONG_ITEM = "wrong_item"
+    NOT_AS_DESCRIBED = "not_as_described"
+    LATE_DELIVERY = "late_delivery"
+
+
+class AgentItemCondition(str, Enum):
+    """Identify returned item conditions in agent contract."""
+
+    UNOPENED = "unopened"
+    OPENED = "opened"
+    USED = "used"
+    DAMAGED = "damaged"
+

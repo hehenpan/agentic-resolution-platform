@@ -285,6 +285,23 @@ class ECommerceReturnsByCustomerOutput(BaseModel):
     )
 
 
+class ECommerceCreateReturnOutput(BaseModel):
+    """Represent the structured data output for a created return request."""
+
+    success: bool = Field(
+        description="Whether the return request was successfully created."
+    )
+    return_request: ECommerceReturnRequestOutput | None = Field(
+        default=None,
+        description="The created return request details, if successful."
+    )
+    error_message: str | None = Field(
+        default=None,
+        description="An error explanation if success is False."
+    )
+
+
+
 AgentOutputPart = Annotated[
     TextPart | StructuredDataPart | SourcesPart,
     Field(discriminator="kind"),

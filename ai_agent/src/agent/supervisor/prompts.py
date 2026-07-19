@@ -29,6 +29,8 @@ SUPERVISOR_ROUTING_PROMPT = ChatPromptTemplate.from_messages(
             "payments, privacy, or other documented customer policies. "
             "Select ecommerce_query for queries asking to retrieve, check, or lookup "
             "customer details, user profiles, customer accounts, or order lists. "
+            "Select ecommerce_action for write actions, changes, mutations, or initiating new "
+            "operations, such as creating or initiating a return request. "
             "Return only the structured route requested by the schema.",
         ),
         ("human", "Customer request: {question}"),

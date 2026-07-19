@@ -6,6 +6,8 @@ from shared_common.schemas.ai_agent.enums import (
     AgentOutputPartKind,
     AgentProgressStatus,
     AgentSourceType,
+    AgentReturnReason,
+    AgentItemCondition,
 )
 from shared_common.schemas.ai_agent.custom_stream_events import (
     AgentCustomStreamEventBase,
@@ -39,6 +41,7 @@ from shared_common.schemas.ai_agent.outputs import (
     ECommerceReturnsByCustomerOutput,
     ECommerceReturnsByOrderOutput,
     ECommerceUserOutput,
+    ECommerceCreateReturnOutput,
     SourceReference,
     SourcesPart,
     StructuredDataPart,
@@ -77,6 +80,7 @@ __all__ = [
     "ECommerceReturnsByCustomerOutput",
     "ECommerceReturnsByOrderOutput",
     "ECommerceUserOutput",
+    "ECommerceCreateReturnOutput",
     "AgentProgressReported",
     "AgentProgressStreamEvent",
     "AgentProgressStatus",
@@ -100,4 +104,6 @@ __all__ = [
     "TextPart",
     "UnixTimestamp",
     "UserMessageInput",
+    "AgentReturnReason",
+    "AgentItemCondition",
 ]
