@@ -63,8 +63,8 @@ async def build_database():
 
     # Specify exactly the 2 target file paths to process
     target_files = [
-        RAG_CORPUS_DIR / "ecommerce" / "shipping_delivery_freight" / "general_ecommerce_delivery_rates_times_options.md",
-        RAG_CORPUS_DIR / "ecommerce" / "privacy_terms" / "general_ecommerce_terms_and_conditions.md"
+        RAG_CORPUS_DIR / "general_ecommerce_delivery_rates_times_options.md",
+        RAG_CORPUS_DIR / "general_ecommerce_terms_and_conditions.md"
     ]
     
     # Initialize MarkdownTextSplitter
