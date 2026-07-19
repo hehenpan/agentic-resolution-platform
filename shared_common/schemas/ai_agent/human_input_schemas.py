@@ -27,3 +27,45 @@ class GetOrdersByEmailInputModel(BaseModel):
         default=None,
         description="Raw natural language text response containing customer email details.",
     )
+
+
+class GetOrderDetailsByOrderIdInputModel(BaseModel):
+    """Pydantic schema representing the expected order-details parameter fields."""
+
+    order_id: int | None = Field(
+        default=None,
+        gt=0,
+        description="Structured positive order identifier used to lookup order details.",
+    )
+    llm_text: str | None = Field(
+        default=None,
+        description="Raw natural language text response containing the order identifier.",
+    )
+
+
+class GetReturnsByOrderIdInputModel(BaseModel):
+    """Pydantic schema representing the expected return-by-order parameter fields."""
+
+    order_id: int | None = Field(
+        default=None,
+        gt=0,
+        description="Structured positive order identifier used to lookup return details.",
+    )
+    llm_text: str | None = Field(
+        default=None,
+        description="Raw natural language text response containing the order identifier.",
+    )
+
+
+class GetReturnsByCustomerIdInputModel(BaseModel):
+    """Pydantic schema representing the expected return-by-customer parameter fields."""
+
+    customer_id: int | None = Field(
+        default=None,
+        gt=0,
+        description="Structured positive customer identifier used to lookup return details.",
+    )
+    llm_text: str | None = Field(
+        default=None,
+        description="Raw natural language text response containing the customer identifier.",
+    )

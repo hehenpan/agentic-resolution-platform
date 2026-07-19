@@ -6,14 +6,20 @@ from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langgraph.types import Command
 from mock_ecommerce_gateway import EcommerceGatewayMock
 from shared_common.schemas.ai_agent import AgentOutput
-from shared_common.schemas.ai_agent.outputs import ECommerceOrdersOutput
+from shared_common.schemas.ai_agent.outputs import (
+    ECommerceOrderDetailsOutput,
+    ECommerceOrdersOutput,
+)
 from shared_common.schemas.ai_agent.schema_ids import (
     AgentOutputSchemaId,
     HumanInputSchemaId,
 )
 from shared_common.schemas.mcp_server.enums import OrderStatus
 from shared_common.schemas.mcp_server.order import (
+    ECommerceOrderItemRecord,
+    ECommerceOrderMeta,
     ECommerceOrderRecord,
+    GetECommerceOrderDetailsResponse,
     GetECommerceOrdersResponse,
 )
 from shared_common.schemas.mcp_server.user import GetECommerceUserResponse
@@ -29,10 +35,17 @@ pytestmark = pytest.mark.anyio
 class FakeSupervisorE2ELLM:
     """Mock LLM to handle routing, agent query reasoning, and parameter extraction."""
 
-    def __init__(self, route: str, tool_name: str, email: str | None = None) -> None:
+    def __init__(
+        self,
+        route: str,
+        tool_name: str,
+        email: str | None = None,
+        tool_args: dict[str, Any] | None = None,
+    ) -> None:
         self.route = route
         self.tool_name = tool_name
         self.email = email
+        self.tool_args = tool_args or {}
 
     def with_structured_output(self, schema: Any, **kwargs: Any) -> Any:
         if schema.__name__ == "ExtractedEmail":
@@ -72,7 +85,7 @@ class FakeSupervisorE2ELLM:
             return AIMessage(content="Here is the retrieved customer information.", type="ai")
 
         # 2. Main agent query tool calling
-        args = {}
+        args = dict(self.tool_args)
         if self.email:
             args["email"] = self.email
         tool_call = {
@@ -169,6 +182,60 @@ async def test_supervisor_e2e_orders_query_interrupt_and_resumes(monkeypatch) ->
     orders_output = ECommerceOrdersOutput.model_validate(output.parts[0].data)
     assert orders_output.orders[0].order_id == 555
     assert orders_output.orders[0].status == OrderStatus.PENDING.value
+
+
+async def test_supervisor_e2e_order_details_query_outputs_public_schema(
+    monkeypatch,
+) -> None:
+    fake_llm = FakeSupervisorE2ELLM(
+        route="ecommerce_query",
+        tool_name="get_ecommerce_order_details",
+        tool_args={"order_id": 808},
+    )
+    monkeypatch.setattr(llm, "get_llm_model", lambda: fake_llm)
+
+    mock_gateway = EcommerceGatewayMock()
+    mock_gateway.expected_order_details = GetECommerceOrderDetailsResponse(
+        exists=True,
+        order=ECommerceOrderMeta(
+            order_id=808,
+            user_id=88,
+            email="shopper@example.com",
+            status=OrderStatus.COMPLETED,
+            total_amount=81.5,
+            created_ts=1778900000,
+        ),
+        items=[
+            ECommerceOrderItemRecord(
+                item_id=80,
+                sku_id=81,
+                sku_code="SKU-81",
+                name="Coffee Mug",
+                quantity=1,
+                price=81.5,
+            )
+        ],
+    )
+    set_ecommerce_gateway(mock_gateway)
+
+    config = {"configurable": {"thread_id": "e2e-thread-order-details-1"}}
+
+    result = await supervisor_graph.ainvoke(
+        {"messages": [HumanMessage(content="Show me order 808 details")]},
+        config=config,
+    )
+
+    assert result["route"] == SelectRouteRoute.ECOMMERCE_QUERY
+    output = AgentOutput.model_validate(result["outputs"][0])
+    assert (
+        output.parts[0].schema_id
+        == AgentOutputSchemaId.ECOMMERCE_ORDER_DETAILS_RESULT_V1.value
+    )
+    order_output = ECommerceOrderDetailsOutput.model_validate(output.parts[0].data)
+    assert order_output.exists is True
+    assert order_output.order is not None
+    assert order_output.order.order_id == 808
+    assert order_output.items[0].sku_code == "SKU-81"
 
 
 async def test_supervisor_e2e_user_query_non_existent(monkeypatch) -> None:

@@ -19,6 +19,10 @@ class AsyncInvokable(Protocol):
 class ChatLLM(AsyncInvokable, Protocol):
     """Define chat model behavior used by agent graphs."""
 
+    def bind_tools(self, tools: list[Any], **kwargs: Any) -> AsyncInvokable:
+        """Return a runnable model configured with callable tool schemas."""
+        ...
+
     def with_structured_output(
         self,
         schema: type[BaseModel],
