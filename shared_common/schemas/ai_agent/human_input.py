@@ -9,6 +9,9 @@ class HumanInputRequest(BaseModel):
     prompt: str = Field(
         description="Human-readable instruction presented to the operator."
     )
+    schema_id: str = Field(
+        description="Stable versioned identifier describing the structure of input."
+    )
     input_schema: dict[str, JsonValue] = Field(
         description="JSON Schema describing the response value expected from the operator."
     )
@@ -41,6 +44,10 @@ class AgentResumeCursor(BaseModel):
 class HumanInputResponse(BaseModel):
     """Represent validated human input used to resume an agent run."""
 
-    data: JsonValue = Field(
+    schema_id: str = Field(
+        description="Stable versioned identifier describing the structure of response_data. "
+        "When answering to the interruption, it should be the same as HumanInputRequest.schema_id."
+    )
+    response_data: JsonValue = Field(
         description="JSON-compatible value supplied to resolve the targeted interrupt."
     )
