@@ -34,21 +34,19 @@ class EmbeddingRecord(BaseModel):
 
 
 class OfflineEmbeddingModel:
-    """Return a recorded embedding for the expected ingest file content."""
+    """Return a mock embedding for any ingested text chunk."""
 
-    def __init__(self, expected_text: str, embedding: list[float]) -> None:
-        self.expected_text = expected_text
+    def __init__(self, embedding: list[float]) -> None:
         self.embedding = embedding
         self.inputs: list[str] = []
 
     async def aembed_query(self, text: str) -> list[float]:
-        assert text == self.expected_text
         self.inputs.append(text)
         return self.embedding.copy()
 
 
 async def test_file_ingest_success(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Verify file ingestion with a recorded offline embedding."""
+    """Verify file ingestion with chunked points storing deterministic UUIDs."""
     file_content = INGEST_FILE.read_bytes()
     text = file_content.decode("utf-8", errors="ignore")
     record = EmbeddingRecord.model_validate_json(
@@ -58,7 +56,7 @@ async def test_file_ingest_success(monkeypatch: pytest.MonkeyPatch) -> None:
     assert record.content_sha256 == hashlib.sha256(file_content).hexdigest()
     assert len(record.embedding) == GEMINI_EMBEDDING_DIM
 
-    embedding_model = OfflineEmbeddingModel(text, record.embedding)
+    embedding_model = OfflineEmbeddingModel(record.embedding)
     monkeypatch.setattr(
         file_ingest_nodes,
         "get_embedding_model",
@@ -93,21 +91,32 @@ async def test_file_ingest_success(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "text" not in res
     assert "vector" not in res
     assert "file_content" not in res
-    assert embedding_model.inputs == [text]
+    
+    # Assert multiple chunks were generated
+    assert len(embedding_model.inputs) > 1
 
     client = get_qdrant_client()
     collection_name = QDRANT_COLLECTION_RAG
 
     assert client.collection_exists(collection_name)
-    points = client.retrieve(collection_name=collection_name, ids=[9999])
 
-    assert len(points) == 1
-    point = points[0]
-    assert point.id == 9999
-    assert point.payload["file_name"] == INGEST_FILE.name
-    assert point.payload["file_owner_id"] == 100
-    assert point.payload["file_tenant_id"] == 200
-    assert "Process Codex Storyboard Tasks" in point.payload["text"]
-    assert point.payload["extra_meta"] == {"tag": "test-ingest"}
-    assert point.payload["extra_context"] == {"project": "unit-test"}
+    from uuid import UUID, uuid5
+    INGEST_NAMESPACE = UUID("507db244-9336-55f5-a55f-146301c9b928")
+    
+    expected_ids = [
+        str(uuid5(INGEST_NAMESPACE, f"chunk:9999:{i}"))
+        for i in range(len(embedding_model.inputs))
+    ]
+
+    points = client.retrieve(collection_name=collection_name, ids=expected_ids)
+    assert len(points) == len(expected_ids)
+
+    for idx, point in enumerate(points):
+        assert point.payload["file_name"] == INGEST_FILE.name
+        assert point.payload["file_owner_id"] == 100
+        assert point.payload["file_tenant_id"] == 200
+        assert point.payload["text"] == embedding_model.inputs[idx]
+        assert point.payload["extra_meta"] == {"tag": "test-ingest"}
+        assert point.payload["extra_context"] == {"project": "unit-test"}
+        
     logger.info("file_ingest_graph integration test passed successfully!")

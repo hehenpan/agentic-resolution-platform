@@ -13,16 +13,34 @@ class FileIngestGraphNames(str, Enum):
     FILE_INGEST = "file_ingest_graph"
 
 
+class FileIngestChunk(BaseModel):
+    """Represent one semantic chunk of the ingested file."""
+
+    chunk_index: int = Field(
+        description="Zero-based index of this chunk within the ingested document."
+    )
+    text: str = Field(
+        description="Raw text segment content of this chunk."
+    )
+    vector: list[float] = Field(
+        description="Embedding vector generated for this chunk's text."
+    )
+
+
 class FileIngestState(RAGFileImportPayload):
     """Represent input and internal state for the File Ingest graph."""
 
     text: str | None = Field(
         default=None,
-        description="Decoded text extracted from the ingested file.",
+        description="[Deprecated] Decoded text extracted from the ingested file. Use chunks instead.",
     )
     vector: list[float] | None = Field(
         default=None,
-        description="Embedding vector generated from the extracted text.",
+        description="[Deprecated] Embedding vector generated from the extracted text. Use chunks instead.",
+    )
+    chunks: list[FileIngestChunk] = Field(
+        default_factory=list,
+        description="List of semantic chunks and their embedding vectors.",
     )
     status: Literal["success"] | None = Field(
         default=None,
@@ -37,8 +55,9 @@ class FileIngestState(RAGFileImportPayload):
 class VectorizeContentUpdate(BaseModel):
     """Represent the state update returned by vectorize_content."""
 
-    text: str = Field(description="Decoded text extracted from file content.")
-    vector: list[float] = Field(description="Embedding vector for the decoded text.")
+    chunks: list[FileIngestChunk] = Field(
+        description="List of vectorized document chunks."
+    )
 
 
 class StoreInVectorDBUpdate(BaseModel):
