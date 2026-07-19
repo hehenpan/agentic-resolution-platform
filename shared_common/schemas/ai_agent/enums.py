@@ -28,6 +28,12 @@ class AgentDomainEventKind(str, Enum):
     RUN_FAILED = "agent.run_failed"
 
 
+class AgentCustomStreamEventKind(str, Enum):
+    """Identify typed events emitted through LangGraph custom streaming."""
+
+    PROGRESS = "agent.progress"
+
+
 class AgentProgressStatus(str, Enum):
     """Identify the lifecycle status of a reported operation."""
 

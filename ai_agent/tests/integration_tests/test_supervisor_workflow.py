@@ -5,10 +5,18 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from ai_agent_sdk.agent_run_projector import AgentRunProjector
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.runnables import RunnableConfig
 from langgraph.types import StreamMode
-from shared_common.schemas.ai_agent import AgentOutput, SourcesPart, TextPart
+from shared_common.schemas.ai_agent import (
+    AgentOutput,
+    AgentProgressReported,
+    AgentProgressStatus,
+    AgentProgressStreamEvent,
+    SourcesPart,
+    TextPart,
+)
 
 from agent.core import llm
 from agent.core.logger import logger
@@ -158,6 +166,38 @@ async def test_supervisor_graph_streams_policy_workflow_updates(
         logger.info(f"event: {event}")
 
     assert any(event["type"] == "checkpoints" for event in events)
+
+    custom_payloads = [
+        event["data"] for event in events if event["type"] == "custom"
+    ]
+    progress_events = [
+        AgentProgressStreamEvent.model_validate(payload)
+        for payload in custom_payloads
+    ]
+    assert len(progress_events) == 2
+    assert progress_events[0].operation == "policy_retrieval"
+    assert progress_events[0].status == AgentProgressStatus.STARTED
+    assert progress_events[1].status == AgentProgressStatus.COMPLETED
+    assert progress_events[1].details["result_count"] > 0
+    assert progress_events[0].progress_id != progress_events[1].progress_id
+
+    projector = AgentRunProjector(
+        thread_id="integration-supervisor-policy-stream",
+        clock=lambda: 1_725_000_000,
+    )
+    domain_events = [
+        domain_event
+        for source_sequence, event in enumerate(events)
+        for domain_event in projector.process(event, source_sequence=source_sequence)
+    ]
+    projected_progress_events = [
+        event
+        for event in domain_events
+        if isinstance(event, AgentProgressReported)
+    ]
+    assert len(projected_progress_events) == 2
+    assert projected_progress_events[0].event_id == progress_events[0].progress_id
+    assert projected_progress_events[1].event_id == progress_events[1].progress_id
 
     updates = [event["data"] for event in events if event["type"] == "updates"]
     assert any(SupervisorNodeNames.ROUTE_REQUEST in update for update in updates)

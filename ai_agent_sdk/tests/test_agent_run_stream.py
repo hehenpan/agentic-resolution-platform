@@ -5,8 +5,11 @@ from collections.abc import AsyncIterator
 import pytest
 from pydantic import BaseModel
 from shared_common.schemas.ai_agent import (
+    AgentCustomStreamEventKind,
     AgentOutputProduced,
     AgentOutputSchemaId,
+    AgentProgressReported,
+    AgentProgressStatus,
     AgentRAGFileImportRequest,
     AgentResumeCursor,
     AgentResumeRequest,
@@ -21,6 +24,7 @@ from shared_common.schemas.ai_agent import (
 from ai_agent_sdk import AgentAssistantId, AgentRunStream
 
 OUTPUT_ID = "11111111-1111-5111-8111-111111111111"
+PROGRESS_ID = "33333333-3333-5333-8333-333333333333"
 
 
 class FakeRunsClient:
@@ -71,6 +75,19 @@ def _client() -> FakeLangGraphClient:
     return FakeLangGraphClient(
         events=[
             {"type": "metadata", "data": {}},
+            {
+                "type": "custom",
+                "data": {
+                    "kind": AgentCustomStreamEventKind.PROGRESS.value,
+                    "schema_version": "1",
+                    "progress_id": PROGRESS_ID,
+                    "operation": "policy_retrieval",
+                    "status": AgentProgressStatus.STARTED.value,
+                    "progress_current": None,
+                    "progress_total": None,
+                    "details": {},
+                },
+            },
             {"type": "updates", "data": {"node": {"outputs": [output]}}},
             {"type": "messages/complete", "data": [{"content": "ignored"}]},
         ],
@@ -97,9 +114,11 @@ async def test_stream_turn_calls_v2_supervisor_and_yields_only_domain_events() -
 
     events = [event async for event in stream.stream_turn(request)]
 
-    assert len(events) == 2
-    assert isinstance(events[0], AgentOutputProduced)
-    assert isinstance(events[1], AgentRunCompleted)
+    assert len(events) == 3
+    assert isinstance(events[0], AgentProgressReported)
+    assert events[0].event_id == PROGRESS_ID
+    assert isinstance(events[1], AgentOutputProduced)
+    assert isinstance(events[2], AgentRunCompleted)
     call = client.runs.calls[0]
     assert call["thread_id"] == "thread-1"
     assert call["assistant_id"] == AgentAssistantId.SUPERVISOR.value

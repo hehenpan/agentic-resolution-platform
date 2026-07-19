@@ -5,11 +5,13 @@ from typing import Any
 
 from langchain_core.messages import AIMessage
 from langgraph.runtime import Runtime
+from shared_common.schemas.ai_agent import AgentProgressStatus
 
 from agent.core import embedding, llm, vectordb
 from agent.core.constants import QDRANT_COLLECTION_RAG
 from agent.core.logger import logger
 from agent.core.messages import require_latest_human_message_text
+from agent.core.stream_events import publish_custom_stream_event
 from agent.supervisor.policy_qa.outputs import build_policy_qa_output
 from agent.supervisor.policy_qa.prompts import (
     POLICY_DRAFT_PROMPT,
@@ -21,6 +23,10 @@ from agent.supervisor.policy_qa.state import (
     PolicyChunk,
     PolicyQAState,
     RetrievePolicyUpdate,
+)
+from agent.supervisor.policy_qa.stream_events import (
+    PolicyQARetrievalEmissionKey,
+    build_policy_retrieval_progress_event,
 )
 
 POLICY_RETRIEVAL_LIMIT = 3
@@ -41,11 +47,26 @@ class RouteAfterRetrievalRoute(str, Enum):
     BUILD_RESPONSE = "build_response"
 
 
-async def retrieve_policy(state: PolicyQAState) -> dict[str, Any]:
+async def retrieve_policy(
+    state: PolicyQAState,
+    runtime: Runtime[None],
+) -> dict[str, Any]:
     """Retrieve policy chunks relevant to the latest customer question."""
     question = require_latest_human_message_text(state.messages)
+    execution_info = runtime.execution_info
+    if execution_info is None or not execution_info.task_id:
+        logger.error("Policy retrieval progress requires a graph task ID")
+        raise RuntimeError("Policy retrieval progress requires a task ID")
 
     try:
+        publish_custom_stream_event(
+            runtime.stream_writer,
+            build_policy_retrieval_progress_event(
+                identity_scope=execution_info.task_id,
+                emission_key=PolicyQARetrievalEmissionKey.STARTED,
+                status=AgentProgressStatus.STARTED,
+            ),
+        )
         query_vector = await embedding.get_embedding_model().aembed_query(question)
         results = vectordb.get_vector_db().search(
             collection_name=QDRANT_COLLECTION_RAG,
@@ -64,6 +85,15 @@ async def retrieve_policy(state: PolicyQAState) -> dict[str, Any]:
                     payload=payload.model_dump(mode="json"),
                 )
             )
+        publish_custom_stream_event(
+            runtime.stream_writer,
+            build_policy_retrieval_progress_event(
+                identity_scope=execution_info.task_id,
+                emission_key=PolicyQARetrievalEmissionKey.COMPLETED,
+                status=AgentProgressStatus.COMPLETED,
+                result_count=len(chunks),
+            ),
+        )
     except Exception as error:
         logger.error(
             "Failed to retrieve policy chunks from the RAG store: {}",
