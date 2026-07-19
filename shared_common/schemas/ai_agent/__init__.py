@@ -31,8 +31,13 @@ from shared_common.schemas.ai_agent.human_input import (
 from shared_common.schemas.ai_agent.outputs import (
     AgentOutput,
     AgentOutputPart,
+    ECommerceOrderDetailsOutput,
+    ECommerceOrderItemOutput,
     ECommerceOrderOutput,
     ECommerceOrdersOutput,
+    ECommerceReturnRequestOutput,
+    ECommerceReturnsByCustomerOutput,
+    ECommerceReturnsByOrderOutput,
     ECommerceUserOutput,
     SourceReference,
     SourcesPart,
@@ -47,7 +52,10 @@ from shared_common.schemas.ai_agent.requests import (
     RAGFileImportPayload,
     UserMessageInput,
 )
-from shared_common.schemas.ai_agent.schema_ids import AgentOutputSchemaId
+from shared_common.schemas.ai_agent.schema_ids import (
+    AgentOutputSchemaId,
+    HumanInputSchemaId,
+)
 
 __all__ = [
     "AgentDomainEvent",
@@ -61,8 +69,13 @@ __all__ = [
     "AgentOutputPartKind",
     "AgentOutputSchemaId",
     "AgentOutputProduced",
+    "ECommerceOrderDetailsOutput",
+    "ECommerceOrderItemOutput",
     "ECommerceOrderOutput",
     "ECommerceOrdersOutput",
+    "ECommerceReturnRequestOutput",
+    "ECommerceReturnsByCustomerOutput",
+    "ECommerceReturnsByOrderOutput",
     "ECommerceUserOutput",
     "AgentProgressReported",
     "AgentProgressStreamEvent",
@@ -78,6 +91,7 @@ __all__ = [
     "HumanInputRequest",
     "HumanInputRequested",
     "HumanInputResponse",
+    "HumanInputSchemaId",
     "RAGFileImportPayload",
     "RAGFileImportResult",
     "SourceReference",

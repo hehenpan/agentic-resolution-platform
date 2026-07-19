@@ -13,6 +13,9 @@ class AgentOutputKey(str, Enum):
     RAG_FILE_IMPORT_RESULT = "rag_file_import.result"
     ECOMMERCE_USER = "ecommerce.user"
     ECOMMERCE_ORDERS = "ecommerce.orders"
+    ECOMMERCE_ORDER_DETAILS = "ecommerce.order_details"
+    ECOMMERCE_RETURNS_BY_ORDER = "ecommerce.returns_by_order"
+    ECOMMERCE_RETURNS_BY_CUSTOMER = "ecommerce.returns_by_customer"
 
 
 AGENT_OUTPUT_NAMESPACE = uuid5(

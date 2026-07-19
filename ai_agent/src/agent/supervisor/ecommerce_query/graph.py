@@ -1,14 +1,23 @@
 """Ecommerce Query subgraph assembly."""
 
 from enum import Enum
+
 from langgraph.graph import END, START, StateGraph
 
+from agent.core.checkpoint import LazyAsyncSqliteSaver
+from agent.core.config import settings
 from agent.supervisor.ecommerce_query.nodes import (
     query_agent,
+    retrieve_order_details,
     retrieve_orders,
+    retrieve_returns_by_customer,
+    retrieve_returns_by_order,
     retrieve_user,
 )
-from agent.supervisor.ecommerce_query.state import EcommerceQueryOutput, EcommerceQueryState
+from agent.supervisor.ecommerce_query.state import (
+    EcommerceQueryOutput,
+    EcommerceQueryState,
+)
 from agent.supervisor.state import SupervisorGraphNames
 
 
@@ -18,6 +27,9 @@ class EcommerceQueryNodeNames(str, Enum):
     QUERY_AGENT = "query_agent"
     RETRIEVE_USER = "retrieve_user"
     RETRIEVE_ORDERS = "retrieve_orders"
+    RETRIEVE_ORDER_DETAILS = "retrieve_order_details"
+    RETRIEVE_RETURNS_BY_ORDER = "retrieve_returns_by_order"
+    RETRIEVE_RETURNS_BY_CUSTOMER = "retrieve_returns_by_customer"
 
 
 class RouteAfterQueryRoute(str, Enum):
@@ -25,6 +37,9 @@ class RouteAfterQueryRoute(str, Enum):
 
     RETRIEVE_USER = "retrieve_user"
     RETRIEVE_ORDERS = "retrieve_orders"
+    RETRIEVE_ORDER_DETAILS = "retrieve_order_details"
+    RETRIEVE_RETURNS_BY_ORDER = "retrieve_returns_by_order"
+    RETRIEVE_RETURNS_BY_CUSTOMER = "retrieve_returns_by_customer"
     END = "__end__"
 
 
@@ -43,6 +58,12 @@ def route_after_query(state: EcommerceQueryState) -> RouteAfterQueryRoute:
             return RouteAfterQueryRoute.RETRIEVE_USER
         if name == "get_ecommerce_orders":
             return RouteAfterQueryRoute.RETRIEVE_ORDERS
+        if name == "get_ecommerce_order_details":
+            return RouteAfterQueryRoute.RETRIEVE_ORDER_DETAILS
+        if name == "get_return_requests_by_order":
+            return RouteAfterQueryRoute.RETRIEVE_RETURNS_BY_ORDER
+        if name == "get_return_requests_by_customer":
+            return RouteAfterQueryRoute.RETRIEVE_RETURNS_BY_CUSTOMER
 
     return RouteAfterQueryRoute.END
 
@@ -54,6 +75,18 @@ builder = StateGraph(
 builder.add_node(EcommerceQueryNodeNames.QUERY_AGENT.value, query_agent)
 builder.add_node(EcommerceQueryNodeNames.RETRIEVE_USER.value, retrieve_user)
 builder.add_node(EcommerceQueryNodeNames.RETRIEVE_ORDERS.value, retrieve_orders)
+builder.add_node(
+    EcommerceQueryNodeNames.RETRIEVE_ORDER_DETAILS.value,
+    retrieve_order_details,
+)
+builder.add_node(
+    EcommerceQueryNodeNames.RETRIEVE_RETURNS_BY_ORDER.value,
+    retrieve_returns_by_order,
+)
+builder.add_node(
+    EcommerceQueryNodeNames.RETRIEVE_RETURNS_BY_CUSTOMER.value,
+    retrieve_returns_by_customer,
+)
 
 builder.add_edge(START, EcommerceQueryNodeNames.QUERY_AGENT.value)
 
@@ -63,16 +96,35 @@ builder.add_conditional_edges(
     {
         RouteAfterQueryRoute.RETRIEVE_USER.value: EcommerceQueryNodeNames.RETRIEVE_USER.value,
         RouteAfterQueryRoute.RETRIEVE_ORDERS.value: EcommerceQueryNodeNames.RETRIEVE_ORDERS.value,
+        RouteAfterQueryRoute.RETRIEVE_ORDER_DETAILS.value: (
+            EcommerceQueryNodeNames.RETRIEVE_ORDER_DETAILS.value
+        ),
+        RouteAfterQueryRoute.RETRIEVE_RETURNS_BY_ORDER.value: (
+            EcommerceQueryNodeNames.RETRIEVE_RETURNS_BY_ORDER.value
+        ),
+        RouteAfterQueryRoute.RETRIEVE_RETURNS_BY_CUSTOMER.value: (
+            EcommerceQueryNodeNames.RETRIEVE_RETURNS_BY_CUSTOMER.value
+        ),
         RouteAfterQueryRoute.END.value: END,
     },
 )
 
 builder.add_edge(EcommerceQueryNodeNames.RETRIEVE_USER.value, EcommerceQueryNodeNames.QUERY_AGENT.value)
 builder.add_edge(EcommerceQueryNodeNames.RETRIEVE_ORDERS.value, EcommerceQueryNodeNames.QUERY_AGENT.value)
+builder.add_edge(
+    EcommerceQueryNodeNames.RETRIEVE_ORDER_DETAILS.value,
+    EcommerceQueryNodeNames.QUERY_AGENT.value,
+)
+builder.add_edge(
+    EcommerceQueryNodeNames.RETRIEVE_RETURNS_BY_ORDER.value,
+    EcommerceQueryNodeNames.QUERY_AGENT.value,
+)
+builder.add_edge(
+    EcommerceQueryNodeNames.RETRIEVE_RETURNS_BY_CUSTOMER.value,
+    EcommerceQueryNodeNames.QUERY_AGENT.value,
+)
 
-from langgraph.checkpoint.memory import MemorySaver
-
-memory = MemorySaver()
+memory = LazyAsyncSqliteSaver(settings.DB_FILE)
 
 ecommerce_query_graph = builder.compile(
     name=SupervisorGraphNames.ECOMMERCE_QUERY.value,

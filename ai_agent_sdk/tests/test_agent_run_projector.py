@@ -4,6 +4,7 @@ import pytest
 from shared_common.schemas.ai_agent import (
     AgentCustomStreamEventKind,
     AgentDomainEventKind,
+    AgentOutputSchemaId,
     AgentOutputProduced,
     AgentProgressReported,
     AgentProgressStatus,
@@ -11,7 +12,9 @@ from shared_common.schemas.ai_agent import (
     AgentRunCompleted,
     AgentRunFailed,
     AgentRunInterrupted,
+    HumanInputSchemaId,
     HumanInputRequested,
+    StructuredDataPart,
     TextPart,
 )
 
@@ -96,6 +99,47 @@ def test_process_can_produce_one_or_multiple_events() -> None:
     assert isinstance(multiple[0], AgentOutputProduced)
     assert isinstance(multiple[1], AgentOutputProduced)
     assert multiple[1].output.output_id == OUTPUT_ID_2
+
+
+def test_process_projects_ecommerce_structured_output_to_domain_event() -> None:
+    events = _projector().process(
+        {
+            "type": "updates",
+            "data": {
+                "retrieve_order_details": {
+                    "outputs": [
+                        {
+                            "output_id": OUTPUT_ID_1,
+                            "parts": [
+                                {
+                                    "kind": "structured_data",
+                                    "schema_id": (
+                                        AgentOutputSchemaId
+                                        .ECOMMERCE_ORDER_DETAILS_RESULT_V1
+                                        .value
+                                    ),
+                                    "data": {
+                                        "exists": False,
+                                        "order": None,
+                                        "items": [],
+                                    },
+                                }
+                            ],
+                        }
+                    ]
+                }
+            },
+        },
+        source_sequence=3,
+    )
+
+    assert len(events) == 1
+    assert isinstance(events[0], AgentOutputProduced)
+    assert isinstance(events[0].output.parts[0], StructuredDataPart)
+    assert (
+        events[0].output.parts[0].schema_id
+        == AgentOutputSchemaId.ECOMMERCE_ORDER_DETAILS_RESULT_V1.value
+    )
 
 
 def test_output_projection_does_not_depend_on_node_name() -> None:
@@ -283,6 +327,7 @@ def test_finalize_interrupted_run_publishes_request_and_terminal() -> None:
                 {
                     "id": "interrupt-1",
                     "value": {
+                        "schema_id": HumanInputSchemaId.GET_USER_INPUT_V1.value,
                         "prompt": "Approve this action?",
                         "input_schema": {"type": "boolean"},
                         "allowed_actions": ["approve", "reject"],
@@ -297,6 +342,39 @@ def test_finalize_interrupted_run_publishes_request_and_terminal() -> None:
     assert events[0].resume_cursor.checkpoint_id == "checkpoint-1"
     assert isinstance(events[1], AgentRunInterrupted)
     assert events[1].interrupt_ids == ["interrupt-1"]
+
+
+def test_finalize_ecommerce_interrupt_publishes_domain_events() -> None:
+    projector = _projector()
+    events = projector.finalize(
+        {
+            "values": {},
+            "checkpoint": {
+                "thread_id": THREAD_ID,
+                "checkpoint_id": "checkpoint-returns",
+                "checkpoint_ns": "supervisor",
+                "checkpoint_map": {"root": "checkpoint-root"},
+            },
+            "interrupts": [
+                {
+                    "id": "interrupt-returns",
+                    "value": {
+                        "schema_id": HumanInputSchemaId.GET_RETURNS_BY_ORDER_INPUT_V1.value,
+                        "prompt": "Please provide the order ID to fetch return details.",
+                        "input_schema": {"type": "object"},
+                    },
+                }
+            ],
+        }
+    )
+
+    assert len(events) == 2
+    assert isinstance(events[0], HumanInputRequested)
+    assert events[0].request.schema_id == (
+        HumanInputSchemaId.GET_RETURNS_BY_ORDER_INPUT_V1.value
+    )
+    assert isinstance(events[1], AgentRunInterrupted)
+    assert events[1].interrupt_ids == ["interrupt-returns"]
 
 
 def test_fail_publishes_one_safe_terminal_event() -> None:
@@ -325,6 +403,7 @@ def test_terminal_paths_are_mutually_exclusive() -> None:
                 {
                     "id": "interrupt-1",
                     "value": {
+                        "schema_id": HumanInputSchemaId.GET_USER_INPUT_V1.value,
                         "prompt": "Confirm",
                         "input_schema": {"type": "boolean"},
                     },
