@@ -42,6 +42,7 @@ from shared_common.schemas.mcp_server.user import GetECommerceUserRequest
 
 from agent.core import llm
 from agent.core.logger import logger
+from agent.core.messages import extract_tool_call
 from agent.core.output_identity import AgentOutputKey, build_output_id
 from agent.integrations.mcp.gateway_provider import get_ecommerce_gateway
 from agent.supervisor.ecommerce_query.prompts import (
@@ -101,20 +102,6 @@ class get_return_requests_by_customer(BaseModel):
 
 
 T = TypeVar("T", bound=BaseModel)
-
-
-def extract_tool_call(
-    message: Any,
-    tool_model: Type[T],
-) -> tuple[T | None, str | None]:
-    """Extract tool call arguments and ID matching the tool model class name."""
-    if not hasattr(message, "tool_calls") or not message.tool_calls:
-        return None, None
-    for tc in message.tool_calls:
-        if tc["name"] == tool_model.__name__:
-            parsed_args = tool_model.model_validate(tc["args"])
-            return parsed_args, tc.get("id")
-    return None, None
 
 
 class ExtractedEmail(BaseModel):

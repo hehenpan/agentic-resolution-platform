@@ -15,6 +15,7 @@ class SelectRouteRoute(str, Enum):
 
     POLICY_QA = "policy_qa"
     ECOMMERCE_QUERY = "ecommerce_query"
+    ECOMMERCE_ACTION = "ecommerce_action"
 
 
 class SupervisorNodeNames(str, Enum):
@@ -23,6 +24,7 @@ class SupervisorNodeNames(str, Enum):
     ROUTE_REQUEST = "route_request"
     POLICY_QA = "policy_qa"
     ECOMMERCE_QUERY = "ecommerce_query"
+    ECOMMERCE_ACTION = "ecommerce_action"
 
 
 class SupervisorGraphNames(str, Enum):
@@ -31,6 +33,7 @@ class SupervisorGraphNames(str, Enum):
     SUPERVISOR = "supervisor_graph"
     POLICY_QA = "policy_qa_graph"
     ECOMMERCE_QUERY = "ecommerce_query_graph"
+    ECOMMERCE_ACTION = "ecommerce_action_graph"
 
 
 class SupervisorState(BaseModel):

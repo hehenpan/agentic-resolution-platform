@@ -16,6 +16,7 @@ class AgentOutputKey(str, Enum):
     ECOMMERCE_ORDER_DETAILS = "ecommerce.order_details"
     ECOMMERCE_RETURNS_BY_ORDER = "ecommerce.returns_by_order"
     ECOMMERCE_RETURNS_BY_CUSTOMER = "ecommerce.returns_by_customer"
+    ECOMMERCE_CREATE_RETURN = "ecommerce.create_return"
 
 
 AGENT_OUTPUT_NAMESPACE = uuid5(

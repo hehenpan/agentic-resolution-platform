@@ -119,8 +119,10 @@ def set_test_checkpointer():
     from agent.file_ingest import file_ingest_graph
     from agent.supervisor import supervisor_graph
     from agent.supervisor.ecommerce_query.graph import ecommerce_query_graph
+    from agent.supervisor.ecommerce_action.graph import ecommerce_action_graph
 
     example_graph.checkpointer = MemorySaver()
     file_ingest_graph.checkpointer = MemorySaver()
     supervisor_graph.checkpointer = MemorySaver()
     ecommerce_query_graph.checkpointer = MemorySaver()
+    ecommerce_action_graph.checkpointer = MemorySaver()
