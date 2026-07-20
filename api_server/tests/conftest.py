@@ -19,6 +19,8 @@ from shared_common.schemas.ai_agent import (
     AgentDomainEvent,
     AgentGetStateEventsRequest,
     AgentJoinStreamRequest,
+    AgentListRunsRequest,
+    AgentListRunsResponse,
     AgentRAGFileImportRequest,
     AgentResumeRequest,
     AgentTurnRequest,
@@ -175,6 +177,13 @@ class MockAIAgentServer(AIAgentServerInterface):
             thread_id=request.thread_id,
             status="pending",
         )
+
+    async def list_runs(
+        self,
+        request: AgentListRunsRequest,
+    ) -> AgentListRunsResponse:
+        return AgentListRunsResponse(runs=[])
+
 
     def stream_turn(
         self,
