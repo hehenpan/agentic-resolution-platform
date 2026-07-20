@@ -45,10 +45,12 @@ class AgentRunProjector:
     def __init__(
         self,
         thread_id: str,
+        run_id: str | None = None,
         clock: Callable[[], int] = _unix_time,
     ) -> None:
         """Initialize projection state for one agent thread operation."""
         self._thread_id = thread_id
+        self._run_id = run_id
         self._clock = clock
         self._next_sequence = 0
         self._published_output_ids: set[str] = set()
@@ -58,12 +60,22 @@ class AgentRunProjector:
         self._resume_cursor: AgentResumeCursor | None = None
         self._terminal_event: AgentDomainEvent | None = None
 
+    def _get_run_id(self) -> str:
+        if self._run_id:
+            return self._run_id
+        return f"run-{self._thread_id}"
+
     def process(
         self,
         raw_event: Mapping[str, object],
         source_sequence: int | None = None,
     ) -> list[AgentDomainEvent]:
         """Project one raw SDK v2 stream event into zero or more events."""
+        if not self._run_id and isinstance(raw_event, Mapping):
+            event_run_id = raw_event.get("run_id")
+            if isinstance(event_run_id, str) and event_run_id:
+                self._run_id = event_run_id
+
         event_type = raw_event.get("type")
         data = raw_event.get("data")
 
@@ -78,6 +90,21 @@ class AgentRunProjector:
             return self._project_custom_event(data, source_sequence)
 
         return []
+
+    def project_thread_state(
+        self,
+        thread_state: Mapping[str, object],
+        run_id: str | None = None,
+    ) -> list[AgentDomainEvent]:
+        """Project a thread state snapshot (from get_state) into domain events."""
+        if run_id:
+            self._run_id = run_id
+        elif not self._run_id and isinstance(thread_state.get("metadata"), Mapping):
+            meta_run_id = thread_state["metadata"].get("run_id")
+            if isinstance(meta_run_id, str) and meta_run_id:
+                self._run_id = meta_run_id
+
+        return self.finalize(thread_state)
 
     def finalize(
         self,
@@ -116,8 +143,10 @@ class AgentRunProjector:
                 self._terminal_subject(type(error).__name__),
             ),
             thread_id=self._thread_id,
+            run_id=self._get_run_id(),
             sequence=self._take_sequence(),
             created_at=self._clock(),
+
             error=AgentError(
                 code="AGENT_RUN_FAILED",
                 message="The agent run could not be completed.",
@@ -149,6 +178,7 @@ class AgentRunProjector:
                 AgentOutputProduced(
                     event_id=output.output_id,
                     thread_id=self._thread_id,
+                    run_id=self._get_run_id(),
                     sequence=self._take_sequence(),
                     source_sequences=source_sequences,
                     created_at=self._clock(),
@@ -181,6 +211,7 @@ class AgentRunProjector:
             event = AgentProgressReported(
                 event_id=progress.progress_id,
                 thread_id=self._thread_id,
+                run_id=self._get_run_id(),
                 sequence=self._take_sequence(),
                 source_sequences=[source_sequence],
                 created_at=self._clock(),
@@ -223,6 +254,7 @@ class AgentRunProjector:
                         interrupt_id,
                     ),
                     thread_id=self._thread_id,
+                    run_id=self._get_run_id(),
                     sequence=self._take_sequence(),
                     created_at=self._clock(),
                     interrupt_id=interrupt_id,
@@ -241,6 +273,7 @@ class AgentRunProjector:
                 self._terminal_subject("completed"),
             ),
             thread_id=self._thread_id,
+            run_id=self._get_run_id(),
             sequence=self._take_sequence(),
             created_at=self._clock(),
             output_ids=sorted(self._outputs, key=str),
@@ -262,10 +295,12 @@ class AgentRunProjector:
                 ",".join(interrupt_ids),
             ),
             thread_id=self._thread_id,
+            run_id=self._get_run_id(),
             sequence=self._take_sequence(),
             created_at=self._clock(),
             interrupt_ids=interrupt_ids,
         )
+
 
     def _update_resume_cursor_from_checkpoint_payload(self, value: object) -> None:
         if not isinstance(value, Mapping):

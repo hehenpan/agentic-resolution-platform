@@ -27,6 +27,10 @@ class FakeAgentRunStream:
         self.resume_request: AgentResumeRequest | None = None
         self.rag_file_import_request: AgentRAGFileImportRequest | None = None
 
+    async def create_run(self, request: object) -> object:
+        from shared_common.schemas.ai_agent import AgentCreateRunResponse
+        return AgentCreateRunResponse(run_id="run-mock-123", thread_id="thread-1", status="pending")
+
     def stream_turn(
         self,
         request: AgentTurnRequest,
@@ -48,6 +52,12 @@ class FakeAgentRunStream:
         self.rag_file_import_request = request
         return self._events()
 
+    def join_stream(self, request: object) -> AsyncIterator[AgentDomainEvent]:
+        return self._events()
+
+    def get_state_events(self, request: object) -> AsyncIterator[AgentDomainEvent]:
+        return self._events()
+
     async def _events(self) -> AsyncIterator[AgentDomainEvent]:
         yield self.event
 
@@ -57,6 +67,7 @@ def _client() -> tuple[AIAgentServerLangGraph, FakeAgentRunStream]:
     event = AgentOutputProduced(
         event_id=output_id,
         thread_id="thread-1",
+        run_id="run-mock-123",
         sequence=0,
         created_at=1_725_000_000,
         output=AgentOutput(
@@ -96,8 +107,9 @@ async def test_client_resume_turn_exposes_only_domain_events() -> None:
         thread_id="thread-1",
         interrupt_id="interrupt-1",
         resume_cursor=AgentResumeCursor(checkpoint_id="checkpoint-1"),
-        response=HumanInputResponse(data=True),
+        response=HumanInputResponse(schema_id="test_schema", response_data=True),
     )
+
 
     events = [event async for event in client.resume_turn(request)]
 

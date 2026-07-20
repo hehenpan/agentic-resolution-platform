@@ -32,6 +32,10 @@ class FakeRunsClient:
         self.events = events
         self.calls: list[dict[str, object]] = []
 
+    async def create(self, **kwargs: object) -> dict[str, object]:
+        self.calls.append(kwargs)
+        return {"run_id": "run-test-123", "status": "pending"}
+
     def stream(self, **kwargs: object) -> AsyncIterator[dict[str, object]]:
         self.calls.append(kwargs)
 
@@ -40,6 +44,16 @@ class FakeRunsClient:
                 yield event
 
         return iterate()
+
+    def join_stream(self, **kwargs: object) -> AsyncIterator[dict[str, object]]:
+        self.calls.append(kwargs)
+
+        async def iterate() -> AsyncIterator[dict[str, object]]:
+            for event in self.events:
+                yield event
+
+        return iterate()
+
 
 
 class FakeThreadsClient:
@@ -164,7 +178,8 @@ async def test_resume_turn_uses_interrupt_and_resume_cursor() -> None:
             checkpoint_ns="supervisor",
             checkpoint_map={"root": "checkpoint-root"},
         ),
-        response=HumanInputResponse(data={"approved": True}),
+        response=HumanInputResponse(schema_id="test_schema", response_data={"approved": True}),
+
     )
 
     events = [event async for event in stream.resume_turn(request)]
@@ -264,3 +279,44 @@ async def test_stream_failure_yields_failed_domain_event_without_final_state() -
     assert len(events) == 1
     assert events[0].kind == "agent.run_failed"
     assert client.threads.calls == []
+
+
+@pytest.mark.anyio
+async def test_create_run_and_join_stream_and_get_state_events() -> None:
+    from shared_common.schemas.ai_agent import (
+        AgentCreateRunRequest,
+        AgentGetStateEventsRequest,
+        AgentJoinStreamRequest,
+    )
+
+    client = _client()
+    stream = AgentRunStream(client)  # type: ignore[arg-type]
+
+    # Test create_run
+    create_req = AgentCreateRunRequest(
+        thread_id="thread-reconnect",
+        assistant_id="supervisor_graph",
+        message=UserMessageInput(content="Hello"),
+    )
+    create_res = await stream.create_run(create_req)
+    assert create_res.run_id == "run-test-123"
+    assert create_res.thread_id == "thread-reconnect"
+
+    # Test join_stream
+    join_req = AgentJoinStreamRequest(
+        thread_id="thread-reconnect",
+        run_id="run-test-123",
+    )
+    join_events = [event async for event in stream.join_stream(join_req)]
+    assert len(join_events) == 3
+    assert join_events[0].run_id == "run-test-123"
+
+    # Test get_state_events
+    state_req = AgentGetStateEventsRequest(
+        thread_id="thread-reconnect",
+        run_id="run-test-123",
+    )
+    state_events = [event async for event in stream.get_state_events(state_req)]
+    assert len(state_events) == 2
+    assert state_events[0].run_id == "run-test-123"
+
