@@ -1,6 +1,7 @@
 from sqlmodel import SQLModel, Field, Index
 import enum 
 from enum import Enum
+import time
 from utils.commons import get_current_ts, generate_user_id, generate_random_id
 from app.core.constants import (
     DB_CHAR_FIELD_SHORT_MAX_LEN, 
@@ -79,4 +80,91 @@ class FileInfo(SQLModel, table = True):
     vector_db_sync_status: FileSyncStatus = Field(default=FileSyncStatus.PENDING) 
 
 
-    
+class ChatSessionStatus(int, Enum):
+    """Represent the lifecycle status of a chat session."""
+    INVALID = 0
+    ACTIVE = 1
+    CLOSED = 2
+
+
+class ChatThreadStatus(int, Enum):
+    """Represent the active or archived status of a chat thread."""
+    ARCHIVED = 0
+    ACTIVE = 1
+
+
+class ChatMessageSenderType(int, Enum):
+    """Represent the sender type of a chat message."""
+    USER = 1
+    AGENT = 2
+    SYSTEM = 3
+
+
+class ChatSession(SQLModel, table=True):
+    """Maintain a customer service session context."""
+    __tablename__ = "chat_session"
+    __table_args__ = (
+        Index("idx_chatsession_user_create", "user_id", "create_ts"),
+    )
+
+    id: int | None = Field(default=None, primary_key=True)
+    chat_session_id: str = Field(unique=True, index=True, description="Unique business session ID.")
+    tenant_id: int = Field(description="Tenant ID owning this session.")
+    user_id: int = Field(description="Customer service user ID owning this session.")
+    title: str = Field(max_length=DB_CHAR_FIELD_LONG_MAX_LEN, default="新对话", description="Session title.")
+    status: ChatSessionStatus = Field(default=ChatSessionStatus.ACTIVE, description="Session status.")
+    create_ts: int = Field(default_factory=get_current_ts, description="Session creation Unix timestamp.")
+    update_ts: int = Field(default_factory=get_current_ts, description="Session update Unix timestamp.")
+
+
+class ChatThread(SQLModel, table=True):
+    """Map a chat session to a LangGraph thread."""
+    __tablename__ = "chat_thread"
+    __table_args__ = (
+        Index("idx_chatthread_session_create", "chat_session_id", "create_ts"),
+    )
+
+    id: int | None = Field(default=None, primary_key=True)
+    thread_id: str = Field(unique=True, index=True, description="LangGraph thread ID.")
+    chat_session_id: str = Field(description="Logic link to chat session ID.")
+    tenant_id: int = Field(index=True, description="Tenant ID.")
+    user_id: int = Field(description="Customer service user ID.")
+    status: ChatThreadStatus = Field(default=ChatThreadStatus.ACTIVE, description="Thread status.")
+    create_ts: int = Field(default_factory=get_current_ts, description="Thread creation Unix timestamp.")
+    update_ts: int = Field(default_factory=get_current_ts, description="Thread update Unix timestamp.")
+
+
+class ThreadRun(SQLModel, table=True):
+    """Record runs triggered on a thread."""
+    __tablename__ = "thread_run"
+    __table_args__ = (
+        Index("idx_threadrun_thread_create", "thread_id", "create_ts"),
+    )
+
+    id: int | None = Field(default=None, primary_key=True)
+    run_id: str = Field(unique=True, index=True, description="LangGraph run ID.")
+    thread_id: str = Field(description="Logic link to thread ID.")
+    chat_session_id: str = Field(description="Logic link to chat session ID.")
+    create_ts: int = Field(default_factory=get_current_ts, description="Run creation Unix timestamp.")
+
+
+class ChatMessage(SQLModel, table=True):
+    """Record individual messages and events in a chat session."""
+    __tablename__ = "chat_message"
+    __table_args__ = (
+        Index("idx_chatmessage_session_create", "chat_session_id", "create_ts_ms"),
+    )
+
+    id: int | None = Field(default=None, primary_key=True)
+    event_id: str = Field(unique=True, description="Domain event ID or unique message ID.")
+    chat_session_id: str = Field(description="Logic link to chat session ID.")
+    thread_id: str = Field(index=True, description="Logic link to thread ID.")
+    run_id: str = Field(index=True, description="Logic link to run ID.")
+    sender_type: ChatMessageSenderType = Field(description="Sender type (1=USER, 2=AGENT, 3=SYSTEM).")
+    event_kind: str = Field(description="Kind of event/message.")
+    sequence: int = Field(default=0, description="Sequence order within the run execution.")
+    payload_json: str = Field(description="JSON serialized payload of the event/message.")
+    create_ts_ms: float = Field(
+        default_factory=lambda: time.time() * 1000,
+        description="Floating-point Unix millisecond timestamp."
+    )
