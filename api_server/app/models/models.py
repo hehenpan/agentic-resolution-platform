@@ -111,7 +111,7 @@ class ChatSession(SQLModel, table=True):
     chat_session_id: str = Field(unique=True, index=True, description="Unique business session ID.")
     tenant_id: int = Field(description="Tenant ID owning this session.")
     user_id: int = Field(description="Customer service user ID owning this session.")
-    title: str = Field(max_length=DB_CHAR_FIELD_LONG_MAX_LEN, default="新对话", description="Session title.")
+    title: str = Field(max_length=DB_CHAR_FIELD_LONG_MAX_LEN, default="New Chat", description="Session title.")
     status: ChatSessionStatus = Field(default=ChatSessionStatus.ACTIVE, description="Session status.")
     create_ts: int = Field(default_factory=get_current_ts, description="Session creation Unix timestamp.")
     update_ts: int = Field(default_factory=get_current_ts, description="Session update Unix timestamp.")
