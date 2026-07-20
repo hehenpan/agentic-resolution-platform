@@ -6,7 +6,11 @@ from app.core.config import settings
 from langgraph_sdk import get_client
 
 from shared_common.schemas.ai_agent import (
+    AgentCreateRunRequest,
+    AgentCreateRunResponse,
     AgentDomainEvent,
+    AgentGetStateEventsRequest,
+    AgentJoinStreamRequest,
     AgentRAGFileImportRequest,
     AgentResumeRequest,
     AgentTurnRequest,
@@ -20,6 +24,13 @@ class AIAgentServerInterface(ABC):
 
     @abstractmethod
     def stop(self):
+        pass
+
+    @abstractmethod
+    async def create_run(
+        self,
+        request: AgentCreateRunRequest,
+    ) -> AgentCreateRunResponse:
         pass
 
     @abstractmethod
@@ -43,6 +54,20 @@ class AIAgentServerInterface(ABC):
     ) -> AsyncIterator[AgentDomainEvent]:
         pass
 
+    @abstractmethod
+    def join_stream(
+        self,
+        request: AgentJoinStreamRequest,
+    ) -> AsyncIterator[AgentDomainEvent]:
+        pass
+
+    @abstractmethod
+    def get_state_events(
+        self,
+        request: AgentGetStateEventsRequest,
+    ) -> AsyncIterator[AgentDomainEvent]:
+        pass
+
 
 class AIAgentServerLangGraph(AIAgentServerInterface):
     def __init__(self):
@@ -54,6 +79,12 @@ class AIAgentServerLangGraph(AIAgentServerInterface):
 
     def stop(self):
         pass
+
+    async def create_run(
+        self,
+        request: AgentCreateRunRequest,
+    ) -> AgentCreateRunResponse:
+        return await self.run_stream.create_run(request)
 
     def stream_turn(
         self,
@@ -73,6 +104,19 @@ class AIAgentServerLangGraph(AIAgentServerInterface):
     ) -> AsyncIterator[AgentDomainEvent]:
         return self.run_stream.stream_rag_file_import(request)
 
+    def join_stream(
+        self,
+        request: AgentJoinStreamRequest,
+    ) -> AsyncIterator[AgentDomainEvent]:
+        return self.run_stream.join_stream(request)
+
+    def get_state_events(
+        self,
+        request: AgentGetStateEventsRequest,
+    ) -> AsyncIterator[AgentDomainEvent]:
+        return self.run_stream.get_state_events(request)
+
 
 def get_ai_agent_server_client() -> AIAgentServerInterface:
     return AIAgentServerLangGraph()
+

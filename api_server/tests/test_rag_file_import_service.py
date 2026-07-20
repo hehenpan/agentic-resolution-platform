@@ -19,8 +19,12 @@ from microservice_client.ai_agent_client import AIAgentServerInterface
 from sqlmodel import Session
 
 from shared_common.schemas.ai_agent import (
+    AgentCreateRunRequest,
+    AgentCreateRunResponse,
     AgentDomainEvent,
     AgentError,
+    AgentGetStateEventsRequest,
+    AgentJoinStreamRequest,
     AgentOutput,
     AgentOutputProduced,
     AgentOutputSchemaId,
@@ -35,6 +39,7 @@ from shared_common.schemas.ai_agent import (
     RAGFileImportPayload,
     StructuredDataPart,
 )
+
 
 FILE_ID = 101
 FILE_NAME = "policy.md"
@@ -86,12 +91,35 @@ class FakeAgentClient(AIAgentServerInterface):
 
         return iterate()
 
+    async def create_run(
+        self,
+        request: AgentCreateRunRequest,
+    ) -> AgentCreateRunResponse:
+        return AgentCreateRunResponse(
+            run_id="run-mock-123",
+            thread_id=request.thread_id,
+            status="pending",
+        )
+
+    def join_stream(
+        self,
+        request: AgentJoinStreamRequest,
+    ) -> AsyncIterator[AgentDomainEvent]:
+        return self._empty_stream()
+
+    def get_state_events(
+        self,
+        request: AgentGetStateEventsRequest,
+    ) -> AsyncIterator[AgentDomainEvent]:
+        return self._empty_stream()
+
     @staticmethod
     async def _empty_stream() -> AsyncIterator[AgentDomainEvent]:
         if False:
             yield AgentRunCompleted(
                 event_id="unused",
                 thread_id="unused",
+                run_id="run-mock-123",
                 sequence=0,
                 created_at=CREATED_AT,
             )
@@ -153,6 +181,7 @@ def _output_event(
     return AgentOutputProduced(
         event_id=output_id,
         thread_id="thread-1",
+        run_id="run-mock-123",
         sequence=sequence,
         created_at=CREATED_AT,
         output=AgentOutput(
@@ -169,10 +198,12 @@ def _completed(
     return AgentRunCompleted(
         event_id="completed-1",
         thread_id="thread-1",
+        run_id="run-mock-123",
         sequence=sequence,
         created_at=CREATED_AT,
         output_ids=output_ids if output_ids is not None else [OUTPUT_ID],
     )
+
 
 
 def _service(
@@ -220,6 +251,7 @@ async def test_import_file_ignores_progress_before_valid_completion(
     progress = AgentProgressReported(
         event_id="progress-1",
         thread_id="thread-1",
+        run_id="run-mock-123",
         sequence=0,
         created_at=CREATED_AT,
         operation="rag_file_import",
@@ -318,6 +350,7 @@ async def test_import_file_rejects_multiple_different_results(
         AgentRunFailed(
             event_id="failed-1",
             thread_id="thread-1",
+            run_id="run-mock-123",
             sequence=0,
             created_at=CREATED_AT,
             error=AgentError(
@@ -329,6 +362,7 @@ async def test_import_file_rejects_multiple_different_results(
         AgentRunInterrupted(
             event_id="interrupted-1",
             thread_id="thread-1",
+            run_id="run-mock-123",
             sequence=0,
             created_at=CREATED_AT,
             interrupt_ids=["interrupt-1"],

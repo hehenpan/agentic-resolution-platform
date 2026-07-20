@@ -24,8 +24,12 @@ from sqlmodel import Session
 from tests.conftest import test_engine
 
 from shared_common.schemas.ai_agent import (
+    AgentCreateRunRequest,
+    AgentCreateRunResponse,
     AgentDomainEvent,
     AgentError,
+    AgentGetStateEventsRequest,
+    AgentJoinStreamRequest,
     AgentOutput,
     AgentOutputProduced,
     AgentOutputSchemaId,
@@ -80,15 +84,39 @@ class FakeAgentClient(AIAgentServerInterface):
 
         return iterate()
 
+    async def create_run(
+        self,
+        request: AgentCreateRunRequest,
+    ) -> AgentCreateRunResponse:
+        return AgentCreateRunResponse(
+            run_id="run-mock-123",
+            thread_id=request.thread_id,
+            status="pending",
+        )
+
+    def join_stream(
+        self,
+        request: AgentJoinStreamRequest,
+    ) -> AsyncIterator[AgentDomainEvent]:
+        return self._empty_stream()
+
+    def get_state_events(
+        self,
+        request: AgentGetStateEventsRequest,
+    ) -> AsyncIterator[AgentDomainEvent]:
+        return self._empty_stream()
+
     @staticmethod
     async def _empty_stream() -> AsyncIterator[AgentDomainEvent]:
         if False:
             yield AgentRunCompleted(
                 event_id="unused",
                 thread_id="unused",
+                run_id="run-mock-123",
                 sequence=0,
                 created_at=CREATED_AT,
             )
+
 
 
 @pytest.fixture
@@ -145,6 +173,7 @@ def _success_events() -> list[AgentDomainEvent]:
         AgentOutputProduced(
             event_id=OUTPUT_ID,
             thread_id="thread-1",
+            run_id="run-mock-123",
             sequence=0,
             created_at=CREATED_AT,
             output=AgentOutput(
@@ -166,6 +195,7 @@ def _success_events() -> list[AgentDomainEvent]:
         AgentRunCompleted(
             event_id="completed-1",
             thread_id="thread-1",
+            run_id="run-mock-123",
             sequence=1,
             created_at=CREATED_AT,
             output_ids=[OUTPUT_ID],
@@ -230,6 +260,7 @@ async def test_local_task_returns_none_and_marks_failed_terminal(
     failed = AgentRunFailed(
         event_id="failed-1",
         thread_id="thread-1",
+        run_id="run-mock-123",
         sequence=0,
         created_at=CREATED_AT,
         error=AgentError(
@@ -238,6 +269,7 @@ async def test_local_task_returns_none_and_marks_failed_terminal(
             retryable=True,
         ),
     )
+
     client = FakeAgentClient([failed])
 
     @contextmanager

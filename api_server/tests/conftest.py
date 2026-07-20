@@ -14,11 +14,16 @@ from sqlmodel import Session, SQLModel, create_engine
 from utils.commons import get_md5
 
 from shared_common.schemas.ai_agent import (
+    AgentCreateRunRequest,
+    AgentCreateRunResponse,
     AgentDomainEvent,
+    AgentGetStateEventsRequest,
+    AgentJoinStreamRequest,
     AgentRAGFileImportRequest,
     AgentResumeRequest,
     AgentTurnRequest,
 )
+
 
 # Global Test Credentials
 TEST_ADMIN_EMAIL = "admin@example.com"
@@ -161,6 +166,16 @@ class MockAIAgentServer(AIAgentServerInterface):
     def stop(self):
         pass
 
+    async def create_run(
+        self,
+        request: AgentCreateRunRequest,
+    ) -> AgentCreateRunResponse:
+        return AgentCreateRunResponse(
+            run_id="run-mock-123",
+            thread_id=request.thread_id,
+            status="pending",
+        )
+
     def stream_turn(
         self,
         request: AgentTurnRequest,
@@ -179,11 +194,24 @@ class MockAIAgentServer(AIAgentServerInterface):
     ) -> AsyncIterator[AgentDomainEvent]:
         return self._empty_stream()
 
+    def join_stream(
+        self,
+        request: AgentJoinStreamRequest,
+    ) -> AsyncIterator[AgentDomainEvent]:
+        return self._empty_stream()
+
+    def get_state_events(
+        self,
+        request: AgentGetStateEventsRequest,
+    ) -> AsyncIterator[AgentDomainEvent]:
+        return self._empty_stream()
+
     @staticmethod
     async def _empty_stream() -> AsyncIterator[AgentDomainEvent]:
         events: list[AgentDomainEvent] = []
         for event in events:
             yield event
+
 
 @pytest.fixture(scope="session", autouse=True)
 def mock_ai_agent_client_fixture():

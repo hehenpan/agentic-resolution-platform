@@ -49,12 +49,17 @@ from shared_common.schemas.ai_agent.outputs import (
 )
 from shared_common.schemas.ai_agent.rag_file_import import RAGFileImportResult
 from shared_common.schemas.ai_agent.requests import (
+    AgentCreateRunRequest,
+    AgentCreateRunResponse,
+    AgentGetStateEventsRequest,
+    AgentJoinStreamRequest,
     AgentRAGFileImportRequest,
     AgentResumeRequest,
     AgentTurnRequest,
     RAGFileImportPayload,
     UserMessageInput,
 )
+
 from shared_common.schemas.ai_agent.schema_ids import (
     AgentOutputSchemaId,
     HumanInputSchemaId,
@@ -81,7 +86,12 @@ __all__ = [
     "ECommerceReturnsByOrderOutput",
     "ECommerceUserOutput",
     "ECommerceCreateReturnOutput",
+    "AgentCreateRunRequest",
+    "AgentCreateRunResponse",
+    "AgentGetStateEventsRequest",
+    "AgentJoinStreamRequest",
     "AgentProgressReported",
+
     "AgentProgressStreamEvent",
     "AgentProgressStatus",
     "AgentRAGFileImportRequest",

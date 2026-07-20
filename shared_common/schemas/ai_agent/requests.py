@@ -25,6 +25,10 @@ class AgentTurnRequest(BaseModel):
     message: UserMessageInput = Field(
         description="User message payload for this agent turn."
     )
+    run_id: str | None = Field(
+        default=None,
+        description="Optional pre-created LangGraph run ID. If omitted, created implicitly.",
+    )
 
 
 class AgentResumeRequest(BaseModel):
@@ -38,6 +42,70 @@ class AgentResumeRequest(BaseModel):
     response: HumanInputResponse = Field(
         description="Human response payload used as the resume value."
     )
+    run_id: str | None = Field(
+        default=None,
+        description="Optional pre-created LangGraph run ID. If omitted, created implicitly.",
+    )
+
+
+class AgentCreateRunRequest(BaseModel):
+    """Request explicit creation of a background agent run."""
+
+    thread_id: str = Field(
+        min_length=1,
+        description="LangGraph thread ID that will execute the run.",
+    )
+    assistant_id: str = Field(
+        default="supervisor_graph",
+        description="Assistant/Graph identifier to execute (e.g. 'supervisor_graph').",
+    )
+    message: UserMessageInput | None = Field(
+        default=None,
+        description="Optional initial user message to trigger the run immediately.",
+    )
+
+
+class AgentCreateRunResponse(BaseModel):
+    """Response returned after creating an agent run."""
+
+    run_id: str = Field(
+        min_length=1,
+        description="Generated unique LangGraph run ID.",
+    )
+    thread_id: str = Field(
+        min_length=1,
+        description="LangGraph thread ID associated with the run.",
+    )
+    status: str = Field(
+        description="Initial status of the created run (e.g. 'pending', 'running').",
+    )
+
+
+class AgentJoinStreamRequest(BaseModel):
+    """Request joining an active or completed run stream by run_id."""
+
+    thread_id: str = Field(
+        min_length=1,
+        description="LangGraph thread ID that owns the run.",
+    )
+    run_id: str = Field(
+        min_length=1,
+        description="Active or target LangGraph run ID to stream from.",
+    )
+
+
+class AgentGetStateEventsRequest(BaseModel):
+    """Request historical domain events projected from thread state."""
+
+    thread_id: str = Field(
+        min_length=1,
+        description="LangGraph thread ID to query state for.",
+    )
+    run_id: str | None = Field(
+        default=None,
+        description="Optional run_id to attach to projected historical events.",
+    )
+
 
 
 class RAGFileImportPayload(BaseModel):

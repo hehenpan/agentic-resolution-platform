@@ -34,6 +34,11 @@ class AgentDomainEventBase(BaseModel):
     thread_id: str = Field(
         description="LangGraph thread that owns the conversation and event."
     )
+    run_id: str = Field(
+        min_length=1,
+        description="Unique identifier of the specific agent run that produced this event.",
+    )
+
     sequence: int = Field(
         strict=True,
         ge=0,
