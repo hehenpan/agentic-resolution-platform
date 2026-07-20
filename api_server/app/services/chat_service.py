@@ -1,7 +1,8 @@
 from sqlmodel import Session
-from app.models.models import ChatSession
+from app.models.models import ChatSession, ChatMessage
 from app.models.chat_wrapper import ChatDBWrapper
 from loguru import logger
+
 
 
 class ChatService:
@@ -41,3 +42,17 @@ class ChatService:
             limit=limit,
             cursor=cursor
         )
+
+    def list_chat_messages_by_session(
+        self,
+        chat_session_id: str,
+        limit: int = 50,
+        cursor: str | None = None,
+    ) -> tuple[list[ChatMessage], bool, str | None]:
+        """List chat history messages for a chat session using cursor pagination."""
+        return self.wrapper.list_chat_messages_by_session(
+            chat_session_id=chat_session_id,
+            limit=limit,
+            cursor=cursor,
+        )
+
