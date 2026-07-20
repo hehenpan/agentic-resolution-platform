@@ -11,6 +11,8 @@ from shared_common.schemas.ai_agent import (
     AgentDomainEvent,
     AgentGetStateEventsRequest,
     AgentJoinStreamRequest,
+    AgentListRunsRequest,
+    AgentListRunsResponse,
     AgentRAGFileImportRequest,
     AgentResumeRequest,
     AgentTurnRequest,
@@ -31,6 +33,13 @@ class AIAgentServerInterface(ABC):
         self,
         request: AgentCreateRunRequest,
     ) -> AgentCreateRunResponse:
+        pass
+
+    @abstractmethod
+    async def list_runs(
+        self,
+        request: AgentListRunsRequest,
+    ) -> AgentListRunsResponse:
         pass
 
     @abstractmethod
@@ -86,11 +95,18 @@ class AIAgentServerLangGraph(AIAgentServerInterface):
     ) -> AgentCreateRunResponse:
         return await self.run_stream.create_run(request)
 
+    async def list_runs(
+        self,
+        request: AgentListRunsRequest,
+    ) -> AgentListRunsResponse:
+        return await self.run_stream.list_runs(request)
+
     def stream_turn(
         self,
         request: AgentTurnRequest,
     ) -> AsyncIterator[AgentDomainEvent]:
         return self.run_stream.stream_turn(request)
+
 
     def resume_turn(
         self,

@@ -60,3 +60,14 @@ class AgentItemCondition(str, Enum):
     USED = "used"
     DAMAGED = "damaged"
 
+
+class AgentRunStatus(str, Enum):
+    """Identify the status of an agent run."""
+
+    PENDING = "pending"
+    RUNNING = "running"
+    SUCCESS = "success"
+    ERROR = "error"
+    INTERRUPTED = "interrupted"
+
+

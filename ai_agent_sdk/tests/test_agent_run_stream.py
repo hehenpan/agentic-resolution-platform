@@ -54,6 +54,18 @@ class FakeRunsClient:
 
         return iterate()
 
+    async def list(self, thread_id: str) -> list[dict[str, object]]:
+        self.calls.append({"thread_id": thread_id})
+        return [
+            {
+                "run_id": "run-test-123",
+                "thread_id": thread_id,
+                "status": "pending",
+                "metadata": {"foo": "bar"},
+            }
+        ]
+
+
 
 
 class FakeThreadsClient:
@@ -319,4 +331,22 @@ async def test_create_run_and_join_stream_and_get_state_events() -> None:
     state_events = [event async for event in stream.get_state_events(state_req)]
     assert len(state_events) == 2
     assert state_events[0].run_id == "run-test-123"
+
+
+@pytest.mark.anyio
+async def test_list_runs() -> None:
+    from shared_common.schemas.ai_agent import AgentListRunsRequest
+
+    client = _client()
+    stream = AgentRunStream(client)  # type: ignore[arg-type]
+
+    req = AgentListRunsRequest(thread_id="thread-list-test")
+    res = await stream.list_runs(req)
+
+    assert len(res.runs) == 1
+    assert res.runs[0].run_id == "run-test-123"
+    assert res.runs[0].thread_id == "thread-list-test"
+    assert res.runs[0].status == "pending"
+    assert res.runs[0].metadata == {"foo": "bar"}
+
 

@@ -25,6 +25,8 @@ from shared_common.schemas.ai_agent import (
     AgentError,
     AgentGetStateEventsRequest,
     AgentJoinStreamRequest,
+    AgentListRunsRequest,
+    AgentListRunsResponse,
     AgentOutput,
     AgentOutputProduced,
     AgentOutputSchemaId,
@@ -100,6 +102,13 @@ class FakeAgentClient(AIAgentServerInterface):
             thread_id=request.thread_id,
             status="pending",
         )
+
+    async def list_runs(
+        self,
+        request: AgentListRunsRequest,
+    ) -> AgentListRunsResponse:
+        return AgentListRunsResponse(runs=[])
+
 
     def join_stream(
         self,

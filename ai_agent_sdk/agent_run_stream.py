@@ -1,6 +1,10 @@
 """Typed streaming adapter for LangGraph agent runs."""
 
+import logging
 from collections.abc import AsyncIterator
+
+logger = logging.getLogger(__name__)
+
 
 from langgraph_sdk.client import LangGraphClient
 from langgraph_sdk.schema import (
@@ -16,8 +20,12 @@ from shared_common.schemas.ai_agent import (
     AgentDomainEvent,
     AgentGetStateEventsRequest,
     AgentJoinStreamRequest,
+    AgentListRunsRequest,
+    AgentListRunsResponse,
     AgentRAGFileImportRequest,
     AgentResumeRequest,
+    AgentRunObject,
+    AgentRunStatus,
     AgentTurnRequest,
 )
 
@@ -55,6 +63,20 @@ class _AgentSupervisorInput(BaseModel):
     )
 
 
+def _parse_run_status(raw_status: str) -> AgentRunStatus:
+    try:
+        return AgentRunStatus(raw_status)
+    except ValueError as error:
+        logger.error(
+            "Failed to parse raw agent run status into AgentRunStatus enum: raw_status=%s",
+            raw_status,
+            exc_info=True,
+        )
+        return AgentRunStatus.PENDING
+
+
+
+
 class AgentRunStream:
     """Expose LangGraph runs as an iterator of stable domain events."""
 
@@ -82,16 +104,50 @@ class AgentRunStream:
         )
         if isinstance(run, dict):
             run_id = str(run.get("run_id") or run.get("id") or "")
-            status = str(run.get("status", "pending"))
+            raw_status = str(run.get("status", "pending"))
         else:
             run_id = str(getattr(run, "run_id", getattr(run, "id", str(run))))
-            status = str(getattr(run, "status", "pending"))
+            raw_status = str(getattr(run, "status", "pending"))
 
         return AgentCreateRunResponse(
             run_id=run_id,
             thread_id=request.thread_id,
-            status=status,
+            status=_parse_run_status(raw_status),
         )
+
+    async def list_runs(
+        self,
+        request: AgentListRunsRequest,
+    ) -> AgentListRunsResponse:
+        """List all agent runs associated with a thread."""
+        raw_runs = await self._client.runs.list(thread_id=request.thread_id)
+        runs: list[AgentRunObject] = []
+        for run in raw_runs:
+            if isinstance(run, dict):
+                run_id = str(run.get("run_id") or run.get("id") or "")
+                thread_id = str(run.get("thread_id") or request.thread_id)
+                raw_status = str(run.get("status", "pending"))
+                raw_meta = run.get("metadata")
+                metadata = raw_meta if isinstance(raw_meta, dict) else {}
+            else:
+                run_id = str(getattr(run, "run_id", getattr(run, "id", str(run))))
+                thread_id = str(getattr(run, "thread_id", request.thread_id))
+                raw_status = str(getattr(run, "status", "pending"))
+                raw_meta = getattr(run, "metadata", {})
+                metadata = raw_meta if isinstance(raw_meta, dict) else {}
+
+            runs.append(
+                AgentRunObject(
+                    run_id=run_id,
+                    thread_id=thread_id,
+                    status=_parse_run_status(raw_status),
+                    metadata=metadata,
+                )
+            )
+
+        return AgentListRunsResponse(runs=runs)
+
+
 
     def stream_turn(
         self,

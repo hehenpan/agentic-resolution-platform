@@ -31,6 +31,20 @@ class FakeAgentRunStream:
         from shared_common.schemas.ai_agent import AgentCreateRunResponse
         return AgentCreateRunResponse(run_id="run-mock-123", thread_id="thread-1", status="pending")
 
+    async def list_runs(self, request: object) -> object:
+        from shared_common.schemas.ai_agent import AgentListRunsResponse, AgentRunObject
+        return AgentListRunsResponse(
+            runs=[
+                AgentRunObject(
+                    run_id="run-mock-123",
+                    thread_id="thread-1",
+                    status="pending",
+                    metadata={"foo": "bar"},
+                )
+            ]
+        )
+
+
     def stream_turn(
         self,
         request: AgentTurnRequest,
@@ -136,3 +150,19 @@ async def test_client_stream_rag_file_import_exposes_only_domain_events() -> Non
 
     assert events == [run_stream.event]
     assert run_stream.rag_file_import_request == request
+
+
+@pytest.mark.anyio
+async def test_client_list_runs() -> None:
+    from shared_common.schemas.ai_agent import AgentListRunsRequest
+
+    client, _ = _client()
+    request = AgentListRunsRequest(thread_id="thread-1")
+
+    res = await client.list_runs(request)
+
+    assert len(res.runs) == 1
+    assert res.runs[0].run_id == "run-mock-123"
+    assert res.runs[0].thread_id == "thread-1"
+    assert res.runs[0].status == "pending"
+

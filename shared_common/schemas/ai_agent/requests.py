@@ -2,6 +2,7 @@
 
 from pydantic import BaseModel, Field, JsonValue
 
+from shared_common.schemas.ai_agent.enums import AgentRunStatus
 from shared_common.schemas.ai_agent.human_input import (
     AgentResumeCursor,
     HumanInputResponse,
@@ -76,9 +77,10 @@ class AgentCreateRunResponse(BaseModel):
         min_length=1,
         description="LangGraph thread ID associated with the run.",
     )
-    status: str = Field(
+    status: AgentRunStatus = Field(
         description="Initial status of the created run (e.g. 'pending', 'running').",
     )
+
 
 
 class AgentJoinStreamRequest(BaseModel):
@@ -137,3 +139,43 @@ class AgentRAGFileImportRequest(BaseModel):
     payload: RAGFileImportPayload = Field(
         description="File content and metadata submitted to the File Ingest graph."
     )
+
+
+class AgentListRunsRequest(BaseModel):
+    """Request listing of runs associated with a thread."""
+
+    thread_id: str = Field(
+        min_length=1,
+        description="LangGraph thread ID to query runs for.",
+    )
+
+
+class AgentRunObject(BaseModel):
+    """Represent an individual agent run's status and metadata."""
+
+    run_id: str = Field(
+        min_length=1,
+        description="LangGraph run ID.",
+    )
+    thread_id: str = Field(
+        min_length=1,
+        description="LangGraph thread ID associated with the run.",
+    )
+    status: AgentRunStatus = Field(
+        description="Current status of the run (e.g. 'pending', 'running', 'success', 'error', 'interrupted').",
+    )
+    metadata: dict[str, JsonValue] = Field(
+        default_factory=dict,
+        description="Optional metadata associated with the run.",
+    )
+
+
+
+class AgentListRunsResponse(BaseModel):
+    """Response containing the list of agent runs for a thread."""
+
+    runs: list[AgentRunObject] = Field(
+        default_factory=list,
+        description="List of agent runs on the thread.",
+    )
+
