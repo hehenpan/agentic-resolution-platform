@@ -7,6 +7,7 @@ from app.models.models import User, UserStatus
 from app.services.user_service import UserService
 from app.services.rbac_service import RBACServiceBase,RBACServiceSimple
 from app.services.file_service import FileService
+from app.services.chat_service import ChatService
 from app.core.constants import SESSION_INFO_KEY
 from app.middleware.middleware import safe_get_context
 
@@ -64,4 +65,12 @@ def get_file_service(db: Session = Depends(get_db)) -> FileService:
     Dependency to get FileService instance.
     """
     return FileService(dbsession=db)
+
+
+def get_chat_service(db: Session = Depends(get_db)) -> ChatService:
+    """
+    Dependency to get ChatService instance.
+    """
+    return ChatService(dbsession=db)
+
 
