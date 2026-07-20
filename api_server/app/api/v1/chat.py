@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 from app.api.deps import get_current_user, get_chat_service
 from app.models.models import User
 from app.schemas.common import BizCode
@@ -10,6 +10,10 @@ from app.schemas.chat import (
     ChatSessionListResponse,
     ChatSessionListResponseData,
     ChatSessionStatus,
+    ChatMessageSenderType,
+    ChatMessageItem,
+    ChatMessageListResponseData,
+    ChatMessageListResponse,
 )
 from app.services.chat_service import ChatService
 from loguru import logger
@@ -117,3 +121,71 @@ async def list_chat_sessions(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to query chat sessions",
         )
+
+
+@chat_router.get(
+    "/sessions/{chat_session_id}/messages",
+    response_model=ChatMessageListResponse,
+    status_code=status.HTTP_200_OK,
+    summary="List Chat History Messages for Session"
+)
+async def list_chat_messages(
+    chat_session_id: str = Path(..., description="Unique business chat session string ID."),
+    limit: int = Query(default=50, ge=1, le=100, description="Maximum number of items to return."),
+    cursor: str | None = Query(default=None, description="Cursor string representing create_ts_ms timestamp."),
+    current_user: User = Depends(get_current_user),
+    chat_service: ChatService = Depends(get_chat_service),
+):
+    """
+    Query chat message history for a given session using cursor-based pagination on create_ts_ms.
+    Returns messages ordered by create_ts_ms descending.
+    """
+    try:
+        messages, has_more, next_cursor = chat_service.list_chat_messages_by_session(
+            chat_session_id=chat_session_id,
+            limit=limit,
+            cursor=cursor,
+        )
+        items = [
+            ChatMessageItem(
+                id=m.id,
+                event_id=m.event_id,
+                chat_session_id=m.chat_session_id,
+                thread_id=m.thread_id,
+                run_id=m.run_id,
+                sender_type=ChatMessageSenderType(m.sender_type),
+                event_kind=m.event_kind,
+                sequence=m.sequence,
+                payload_json=m.payload_json,
+                create_ts_ms=m.create_ts_ms,
+            )
+            for m in messages
+        ]
+        return ChatMessageListResponse(
+            code=BizCode.SUCCESS,
+            message="Chat history messages retrieved successfully",
+            data=ChatMessageListResponseData(
+                has_more=has_more,
+                next_cursor=next_cursor,
+                items=items,
+            ),
+        )
+    except ValueError as val_err:
+        logger.error(
+            f"Invalid cursor parameter for querying chat messages: chat_session_id={chat_session_id}, "
+            f"cursor={cursor}, error={val_err}"
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(val_err),
+        )
+    except Exception as e:
+        logger.exception(
+            f"Error querying chat messages: chat_session_id={chat_session_id}, "
+            f"user_id={current_user.user_id}, error={e}"
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to query chat history messages",
+        )
+

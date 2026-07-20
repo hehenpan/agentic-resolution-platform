@@ -1,5 +1,5 @@
 from sqlmodel import Session, select, func, or_, and_
-from app.models.models import ChatSession, ChatSessionStatus
+from app.models.models import ChatSession, ChatSessionStatus, ChatMessage
 from utils.commons import generate_uuid_hex, get_current_ts
 from loguru import logger
 
@@ -109,3 +109,48 @@ class ChatDBWrapper:
                 f"user_id={user_id}, error={e}"
             )
             raise e
+
+    def list_chat_messages_by_session(
+        self,
+        chat_session_id: str,
+        limit: int = 50,
+        cursor: str | None = None,
+    ) -> tuple[list[ChatMessage], bool, str | None]:
+        """
+        Query ChatMessage records by chat_session_id using index
+        idx_chatmessage_session_create (chat_session_id, create_ts_ms).
+        Cursor is a string representing create_ts_ms as float.
+        Returns messages ordered by create_ts_ms DESC.
+        """
+        try:
+            query_stmt = select(ChatMessage).where(ChatMessage.chat_session_id == chat_session_id)
+
+            if cursor and cursor.strip():
+                try:
+                    cursor_ts_ms = float(cursor.strip())
+                    query_stmt = query_stmt.where(ChatMessage.create_ts_ms < cursor_ts_ms)
+                except ValueError as e:
+                    logger.error(
+                        f"Database error - invalid cursor format for chat messages: cursor={cursor}, error={e}"
+                    )
+                    raise ValueError(f"Invalid cursor format: {cursor}") from e
+
+            query_stmt = query_stmt.order_by(ChatMessage.create_ts_ms.desc()).limit(limit + 1)
+
+            messages = list(self.db.exec(query_stmt).all())
+
+            has_more = len(messages) > limit
+            if has_more:
+                messages = messages[:limit]
+                last_item = messages[-1]
+                next_cursor = str(last_item.create_ts_ms)
+            else:
+                next_cursor = None
+
+            return messages, has_more, next_cursor
+        except Exception as e:
+            logger.exception(
+                f"Database error while listing ChatMessages: chat_session_id={chat_session_id}, error={e}"
+            )
+            raise e
+

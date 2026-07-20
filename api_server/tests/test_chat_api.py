@@ -189,3 +189,101 @@ def test_list_chat_sessions_same_timestamp_composite_cursor(client, db_session: 
     second_item = res_data2["data"]["items"][0]
     assert second_item["id"] < first_item["id"]
     assert second_item["create_ts"] == same_ts
+
+
+def test_list_chat_messages_success_and_pagination(client, db_session: Session):
+    """
+    Test listing chat messages for a session:
+    1. Insert 3 ChatMessage records with distinct create_ts_ms.
+    2. Query page 1 with limit=2, assert DESC ordering by create_ts_ms and payload_json passthrough.
+    3. Query page 2 using next_cursor string.
+    """
+    login_user_client(client)
+
+    from app.models.models import ChatMessage, ChatMessageSenderType as ModelSenderType
+    from utils.commons import generate_uuid_hex
+
+    session_id = f"cs_{generate_uuid_hex()}"
+
+    msg1 = ChatMessage(
+        event_id=f"evt_{generate_uuid_hex()}",
+        chat_session_id=session_id,
+        thread_id="thread_1",
+        run_id="run_1",
+        sender_type=ModelSenderType.USER,
+        event_kind="user_message",
+        sequence=1,
+        payload_json='{"text": "Hello"}',
+        create_ts_ms=1000.0,
+    )
+    msg2 = ChatMessage(
+        event_id=f"evt_{generate_uuid_hex()}",
+        chat_session_id=session_id,
+        thread_id="thread_1",
+        run_id="run_1",
+        sender_type=ModelSenderType.AGENT,
+        event_kind="agent_message",
+        sequence=2,
+        payload_json='{"text": "Hi there!"}',
+        create_ts_ms=2000.0,
+    )
+    msg3 = ChatMessage(
+        event_id=f"evt_{generate_uuid_hex()}",
+        chat_session_id=session_id,
+        thread_id="thread_1",
+        run_id="run_1",
+        sender_type=ModelSenderType.USER,
+        event_kind="user_message",
+        sequence=3,
+        payload_json='{"text": "How are you?"}',
+        create_ts_ms=3000.0,
+    )
+    db_session.add_all([msg1, msg2, msg3])
+    db_session.commit()
+
+    # Query Page 1 (limit=2)
+    response = client.get(f"https://testserver/api/v1/chat/sessions/{session_id}/messages?limit=2")
+    assert response.status_code == status.HTTP_200_OK
+    res_data = response.json()
+    assert res_data["code"] == BizCode.SUCCESS
+    assert res_data["message"] == "Chat history messages retrieved successfully"
+
+    items = res_data["data"]["items"]
+    assert len(items) == 2
+    assert items[0]["create_ts_ms"] == 3000.0
+    assert items[0]["payload_json"] == '{"text": "How are you?"}'
+    assert items[1]["create_ts_ms"] == 2000.0
+    assert items[1]["payload_json"] == '{"text": "Hi there!"}'
+    assert res_data["data"]["has_more"] is True
+
+    next_cursor = res_data["data"]["next_cursor"]
+    assert next_cursor == "2000.0"
+
+    # Query Page 2 (cursor=2000.0)
+    response_page2 = client.get(
+        f"https://testserver/api/v1/chat/sessions/{session_id}/messages?limit=2&cursor={next_cursor}"
+    )
+    assert response_page2.status_code == status.HTTP_200_OK
+    res_data2 = response_page2.json()
+    assert res_data2["code"] == BizCode.SUCCESS
+
+    items2 = res_data2["data"]["items"]
+    assert len(items2) == 1
+    assert items2[0]["create_ts_ms"] == 1000.0
+    assert items2[0]["payload_json"] == '{"text": "Hello"}'
+    assert res_data2["data"]["has_more"] is False
+    assert res_data2["data"]["next_cursor"] is None
+
+
+def test_list_chat_messages_invalid_cursor(client, db_session: Session):
+    """
+    Test passing an invalid non-float string as cursor for message history.
+    Should return HTTP 400 Bad Request.
+    """
+    login_user_client(client)
+
+    session_id = "cs_test_invalid_cursor"
+    response = client.get(f"https://testserver/api/v1/chat/sessions/{session_id}/messages?cursor=invalid_cursor_str")
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert "Invalid cursor format" in response.json()["detail"]
+
