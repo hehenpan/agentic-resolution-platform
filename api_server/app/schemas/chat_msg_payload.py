@@ -5,7 +5,11 @@ import json
 from typing import Annotated, Any, Literal
 from pydantic import BaseModel, Field
 
-from shared_common.schemas.ai_agent import AgentDomainEventBase
+from shared_common.schemas.ai_agent import (
+    AgentDomainEventBase,
+    AgentReturnReason,
+    AgentItemCondition,
+)
 
 
 class WebUserEventKind(str, Enum):
@@ -24,6 +28,116 @@ class WebStructuredDataSchemaId(str, Enum):
     ECOMMERCE_RETURNS_BY_ORDER_RESULT_V1 = "ecommerce.returns_by_order_result.v1"
     ECOMMERCE_RETURNS_BY_CUSTOMER_RESULT_V1 = "ecommerce.returns_by_customer_result.v1"
     ECOMMERCE_CREATE_RETURN_RESULT_V1 = "ecommerce.create_return_result.v1"
+
+
+class WebHumanInputSchemaId(str, Enum):
+    """Supported Web frontend human input schema identifiers."""
+    UNKNOWN = "unknown"
+    GET_USER_INPUT_V1 = "human_input.get_user.v1"
+    GET_ORDERS_INPUT_V1 = "human_input.get_orders.v1"
+    GET_ORDER_DETAILS_INPUT_V1 = "human_input.get_order_details.v1"
+    GET_RETURNS_BY_ORDER_INPUT_V1 = "human_input.get_returns_by_order.v1"
+    GET_RETURNS_BY_CUSTOMER_INPUT_V1 = "human_input.get_returns_by_customer.v1"
+    CREATE_RETURN_REQUEST_INPUT_V1 = "human_input.create_return_request.v1"
+
+
+class WebGetUserByEmailInputModel(BaseModel):
+    """Web schema representing user lookup parameters."""
+    email: str | None = Field(
+        default=None,
+        description="Customer email address for user lookup.",
+    )
+    llm_text: str | None = Field(
+        default=None,
+        description="Raw natural language text response containing customer email details.",
+    )
+
+
+class WebGetOrdersByEmailInputModel(BaseModel):
+    """Web schema representing orders lookup parameters."""
+    email: str | None = Field(
+        default=None,
+        description="Customer email address for orders query.",
+    )
+    llm_text: str | None = Field(
+        default=None,
+        description="Raw natural language text response containing customer email details.",
+    )
+
+
+class WebGetOrderDetailsByOrderIdInputModel(BaseModel):
+    """Web schema representing order details parameters."""
+    order_id: int | None = Field(
+        default=None,
+        gt=0,
+        description="Positive order identifier for lookup.",
+    )
+    llm_text: str | None = Field(
+        default=None,
+        description="Raw natural language text response containing order identifier.",
+    )
+
+
+class WebGetReturnsByOrderIdInputModel(BaseModel):
+    """Web schema representing return-by-order parameters."""
+    order_id: int | None = Field(
+        default=None,
+        gt=0,
+        description="Positive order identifier for return lookup.",
+    )
+    llm_text: str | None = Field(
+        default=None,
+        description="Raw natural language text response containing order identifier.",
+    )
+
+
+class WebGetReturnsByCustomerIdInputModel(BaseModel):
+    """Web schema representing return-by-customer parameters."""
+    customer_id: int | None = Field(
+        default=None,
+        gt=0,
+        description="Positive customer identifier for return lookup.",
+    )
+    llm_text: str | None = Field(
+        default=None,
+        description="Raw natural language text response containing customer identifier.",
+    )
+
+
+class WebCreateReturnRequestInputModel(BaseModel):
+    """Web schema representing create return request parameters."""
+    order_id: int | None = Field(
+        default=None,
+        gt=0,
+        description="Positive order identifier to return.",
+    )
+    customer_id: int | None = Field(
+        default=None,
+        gt=0,
+        description="Positive customer identifier for return.",
+    )
+    reason_code: AgentReturnReason | None = Field(
+        default=None,
+        description="Reason code for return (CHANGE_OF_MIND, DAMAGED, WRONG_ITEM, NOT_AS_DESCRIBED, LATE_DELIVERY).",
+    )
+    reason_text: str | None = Field(
+        default=None,
+        description="Additional reason explanation text.",
+    )
+    item_condition: AgentItemCondition | None = Field(
+        default=None,
+        description="Product condition (UNOPENED, OPENED, USED, DAMAGED).",
+    )
+    created_by: int | None = Field(
+        default=None,
+        description="User ID of operator creating return request.",
+    )
+    llm_text: str | None = Field(
+        default=None,
+        description="Raw natural language text response containing return details.",
+    )
+
+
 
 
 class WebChatUserPayload(BaseModel):
@@ -105,7 +219,7 @@ class WebAgentError(BaseModel):
 class WebHumanInputRequest(BaseModel):
     """Web frontend representation of human input request prompt and schema."""
     prompt: str = Field(..., description="Instruction presented to operator.")
-    schema_id: str = Field(..., description="Versioned schema identifier.")
+    schema_id: WebHumanInputSchemaId = Field(..., description="Mapped safe human input schema identifier.")
     input_schema: dict[str, Any] = Field(default_factory=dict, description="JSON Schema for input.")
     context: dict[str, Any] = Field(default_factory=dict, description="Additional context data.")
     allowed_actions: list[str] = Field(default_factory=list, description="Allowed operator actions.")
