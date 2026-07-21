@@ -23,6 +23,13 @@ from app.schemas.chat_msg_payload import (
     WebTextPart,
     WebStructuredDataPart,
     WebStructuredDataSchemaId,
+    WebHumanInputSchemaId,
+    WebGetUserByEmailInputModel,
+    WebGetOrdersByEmailInputModel,
+    WebGetOrderDetailsByOrderIdInputModel,
+    WebGetReturnsByOrderIdInputModel,
+    WebGetReturnsByCustomerIdInputModel,
+    WebCreateReturnRequestInputModel,
     WebSourcesPart,
     WebSourceReference,
     WebAgentOutputPart,
@@ -44,6 +51,15 @@ from loguru import logger
 
 class ChatEventProjector:
     """Anti-Corruption Layer service transforming domain events into Web Chat Payload schemas."""
+
+    _HUMAN_INPUT_SCHEMA_MAP: dict[WebHumanInputSchemaId, dict[str, Any]] = {
+        WebHumanInputSchemaId.GET_USER_INPUT_V1: WebGetUserByEmailInputModel.model_json_schema(),
+        WebHumanInputSchemaId.GET_ORDERS_INPUT_V1: WebGetOrdersByEmailInputModel.model_json_schema(),
+        WebHumanInputSchemaId.GET_ORDER_DETAILS_INPUT_V1: WebGetOrderDetailsByOrderIdInputModel.model_json_schema(),
+        WebHumanInputSchemaId.GET_RETURNS_BY_ORDER_INPUT_V1: WebGetReturnsByOrderIdInputModel.model_json_schema(),
+        WebHumanInputSchemaId.GET_RETURNS_BY_CUSTOMER_INPUT_V1: WebGetReturnsByCustomerIdInputModel.model_json_schema(),
+        WebHumanInputSchemaId.CREATE_RETURN_REQUEST_INPUT_V1: WebCreateReturnRequestInputModel.model_json_schema(),
+    }
 
     @staticmethod
     def project_user_message(content: str) -> WebChatUserPayload:
@@ -81,6 +97,45 @@ class ChatEventProjector:
                 f"Falling back to UNKNOWN schema. Cause: {exc}"
             )
             return WebStructuredDataSchemaId.UNKNOWN
+
+    @staticmethod
+    def project_human_input_schema_id(domain_schema_id: str) -> WebHumanInputSchemaId:
+        """
+        Safely project domain human input schema_id string into WebHumanInputSchemaId enum.
+        If mapping fails (unrecognized schema_id), log error and fallback to UNKNOWN.
+        """
+        try:
+            return WebHumanInputSchemaId(domain_schema_id)
+        except ValueError as exc:
+            logger.error(
+                f"Failed to map domain human input schema_id '{domain_schema_id}' to WebHumanInputSchemaId. "
+                f"Falling back to UNKNOWN schema. Cause: {exc}"
+            )
+            return WebHumanInputSchemaId.UNKNOWN
+
+    @classmethod
+    def project_human_input_schema(
+        cls,
+        schema_id: str | WebHumanInputSchemaId,
+        domain_input_schema: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """
+        Project human input JSON Schema using api_server defined Web Models based on schema_id.
+        Decouples frontend from internal ai_agent Pydantic model schemas using pre-cached lookup dict.
+        """
+        web_schema_id = (
+            schema_id
+            if isinstance(schema_id, WebHumanInputSchemaId)
+            else cls.project_human_input_schema_id(schema_id)
+        )
+        cached_schema = cls._HUMAN_INPUT_SCHEMA_MAP.get(web_schema_id)
+        if cached_schema is not None:
+            return cached_schema
+        return domain_input_schema or {}
+
+
+
+
 
     @staticmethod
     def project_output_part(part: AgentOutputPart) -> WebAgentOutputPart:
@@ -169,8 +224,11 @@ class ChatEventProjector:
         elif isinstance(event, HumanInputRequested):
             web_req = WebHumanInputRequest(
                 prompt=event.request.prompt,
-                schema_id=event.request.schema_id,
-                input_schema=event.request.input_schema,
+                schema_id=ChatEventProjector.project_human_input_schema_id(event.request.schema_id),
+                input_schema=ChatEventProjector.project_human_input_schema(
+                    event.request.schema_id,
+                    event.request.input_schema,
+                ),
                 context=event.request.context,
                 allowed_actions=event.request.allowed_actions,
             )

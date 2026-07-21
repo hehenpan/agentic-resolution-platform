@@ -614,6 +614,69 @@ def test_user_payload_schemas_and_projector():
     assert user_resume_payload.response_data == {"approved": True}
 
 
+def test_project_human_input_schema_id_known_and_unknown():
+    """
+    Test ChatEventProjector.project_human_input_schema_id:
+    1. Valid domain schema_id maps to corresponding WebHumanInputSchemaId.
+    2. Unknown domain schema_id maps to WebHumanInputSchemaId.UNKNOWN and logs error.
+    """
+    from app.services.chat_event_projector import ChatEventProjector
+    from app.schemas.chat_msg_payload import WebHumanInputSchemaId, WebHumanInputRequested
+    from shared_common.schemas.ai_agent import (
+        HumanInputRequested,
+        HumanInputRequest,
+        AgentResumeCursor,
+    )
+
+    # 1. Known human input schema_id
+    res_known = ChatEventProjector.project_human_input_schema_id("human_input.get_user.v1")
+    assert res_known == WebHumanInputSchemaId.GET_USER_INPUT_V1
+
+    # 2. Unknown human input schema_id fallback
+    res_unknown = ChatEventProjector.project_human_input_schema_id("human_input.unknown_future.v999")
+    assert res_unknown == WebHumanInputSchemaId.UNKNOWN
+
+    # 3. Test project_human_input_schema for known model (passing enum or raw str) and fallback for unknown
+    schema_dict_enum = ChatEventProjector.project_human_input_schema(WebHumanInputSchemaId.GET_USER_INPUT_V1)
+    schema_dict_str = ChatEventProjector.project_human_input_schema("human_input.get_user.v1")
+    assert "properties" in schema_dict_enum
+    assert "email" in schema_dict_enum["properties"]
+    assert schema_dict_enum == schema_dict_str
+
+    fallback_dict = ChatEventProjector.project_human_input_schema(
+        "human_input.unknown_future.v999",
+        {"custom_field": "custom_val"},
+    )
+    assert fallback_dict == {"custom_field": "custom_val"}
+
+    # 4. Test HumanInputRequested event projection with ACL input_schema
+    domain_event = HumanInputRequested(
+        event_id="evt_human_1",
+        thread_id="th_1",
+        run_id="run_1",
+        sequence=1,
+        source_sequences=[1],
+        created_at=1600000000,
+        interrupt_id="intr_99",
+        request=HumanInputRequest(
+            prompt="Please provide user email",
+            schema_id="human_input.get_user.v1",
+            input_schema={"ignored_domain_schema": True},
+            context={"user_id": "u1"},
+            allowed_actions=["submit"],
+        ),
+        resume_cursor=AgentResumeCursor(checkpoint_id="cp_1"),
+    )
+    web_event = ChatEventProjector.project_domain_event(domain_event)
+    assert isinstance(web_event, WebHumanInputRequested)
+    assert web_event.request.schema_id == WebHumanInputSchemaId.GET_USER_INPUT_V1
+    assert web_event.request.prompt == "Please provide user email"
+    assert "properties" in web_event.request.input_schema
+    assert "email" in web_event.request.input_schema["properties"]
+
+
+
+
 
 
 
