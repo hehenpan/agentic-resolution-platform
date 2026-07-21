@@ -1,4 +1,6 @@
+import json
 from enum import Enum
+from typing import Any
 from pydantic import BaseModel, Field
 from app.schemas.common import ResponseBase, BizCode
 
@@ -89,3 +91,31 @@ class ChatMessageListResponse(ResponseBase):
     """HTTP Response model for querying chat history messages."""
     data: ChatMessageListResponseData = Field(description="Query result payload containing message items.")
 
+
+class SendChatMessageRequest(BaseModel):
+    """Request payload for sending a user chat message."""
+    content: str = Field(..., description="Message text content sent by the user.", min_length=1)
+
+
+class ChatSSEEventType(str, Enum):
+    """Discriminator enum identifying Server-Sent Event (SSE) wire event types."""
+    USER_MESSAGE = "user_message"
+    OUTPUT_PRODUCED = "agent.output_produced"
+    PROGRESS_REPORTED = "agent.progress_reported"
+    HUMAN_INPUT_REQUESTED = "agent.human_input_requested"
+    RUN_COMPLETED = "agent.run_completed"
+    RUN_INTERRUPTED = "agent.run_interrupted"
+    RUN_FAILED = "agent.run_failed"
+
+
+class ChatSSEEvent(BaseModel):
+    """Envelope representing a Server-Sent Event (SSE) pushed to client."""
+    event_id: str = Field(..., description="Unique event identifier for deduplication/tracking.")
+    event_type: ChatSSEEventType = Field(..., description="Domain event discriminator enum.")
+    data: dict[str, Any] = Field(..., description="Event payload dictionary.")
+
+    def to_sse_format(self) -> str:
+        """Serialize event to standard SSE wire format string."""
+        payload_str = json.dumps(self.data, ensure_ascii=False)
+        event_type_str = self.event_type.value if isinstance(self.event_type, Enum) else str(self.event_type)
+        return f"event: {event_type_str}\ndata: {payload_str}\n\n"

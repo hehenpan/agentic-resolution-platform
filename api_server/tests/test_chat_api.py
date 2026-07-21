@@ -1,12 +1,31 @@
+import json
 from fastapi import status
 from sqlmodel import Session, select
-from app.models.models import ChatSession, ChatSessionStatus as ModelChatSessionStatus
+from app.models.models import (
+    ChatSession,
+    ChatSessionStatus as ModelChatSessionStatus,
+    User,
+    ChatThread,
+    ThreadRun,
+    ChatMessage,
+)
 from app.schemas.chat import ChatSessionStatus
 from app.schemas.common import BizCode
+from app.api.deps import get_ai_agent_client
+from microservice_client.ai_agent_client import AIAgentServerInterface
+from shared_common.schemas.ai_agent import (
+    AgentCreateRunResponse,
+    AgentOutputProduced,
+    AgentRunCompleted,
+    AgentRunStatus,
+    AgentOutput,
+    TextPart,
+)
 from tests.conftest import (
     TEST_USER_EMAIL,
     TEST_USER_PASSWORD,
 )
+
 
 
 def login_user_client(client):
@@ -286,4 +305,316 @@ def test_list_chat_messages_invalid_cursor(client, db_session: Session):
     response = client.get(f"https://testserver/api/v1/chat/sessions/{session_id}/messages?cursor=invalid_cursor_str")
     assert response.status_code == status.HTTP_400_BAD_REQUEST
     assert "Invalid cursor format" in response.json()["detail"]
+
+
+class DummyMockAIAgentClient(AIAgentServerInterface):
+    """Dummy mock implementation of AIAgentServerInterface for testing SSE streaming."""
+
+    def __init__(self, run_id: str, events: list):
+        self.mock_run_id = run_id
+        self.mock_events = events
+
+    def start(self):
+        pass
+
+    def stop(self):
+        pass
+
+    async def create_run(self, request):
+        return AgentCreateRunResponse(
+            run_id=self.mock_run_id,
+            thread_id=request.thread_id,
+            status=AgentRunStatus.PENDING,
+        )
+
+    async def list_runs(self, request):
+        pass
+
+    async def _event_generator(self):
+        for event in self.mock_events:
+            yield event
+
+    def stream_turn(self, request):
+        return self._event_generator()
+
+    def resume_turn(self, request):
+        pass
+
+    def stream_rag_file_import(self, request):
+        pass
+
+    def join_stream(self, request):
+        pass
+
+    def get_state_events(self, request):
+        pass
+
+
+def test_send_chat_message_sse_success(client, db_session: Session):
+    """
+    Test sending chat message and receiving SSE event stream:
+    1. Create a session in DB.
+    2. Override get_ai_agent_client dependency with DummyMockAIAgentClient.
+    3. Post message to /api/v1/chat/sessions/{session_id}/messages.
+    4. Assert SSE stream wire format ('event: <kind>\ndata: <json>\n\n').
+    5. Assert DB records created in ChatThread, ThreadRun, and ChatMessage.
+    """
+    login_user_client(client)
+    from utils.commons import generate_uuid_hex, get_current_ts
+
+    user = db_session.exec(select(User).where(User.email == TEST_USER_EMAIL)).first()
+    session_id = f"cs_{generate_uuid_hex()}"
+    cs = ChatSession(
+        chat_session_id=session_id,
+        tenant_id=user.tenant_id,
+        user_id=user.user_id,
+        title="Test SSE Session",
+        status=ModelChatSessionStatus.ACTIVE,
+        create_ts=get_current_ts(),
+        update_ts=get_current_ts(),
+    )
+    db_session.add(cs)
+    db_session.commit()
+
+    run_id = f"run_{generate_uuid_hex()}"
+    thread_id = f"thread_{generate_uuid_hex()}"
+
+    # Prepare domain events
+    event1 = AgentOutputProduced(
+        event_id=f"evt_{generate_uuid_hex()}",
+        thread_id=thread_id,
+        run_id=run_id,
+        sequence=1,
+        created_at=get_current_ts(),
+        output=AgentOutput(
+            output_id=f"out_{generate_uuid_hex()}",
+            parts=[TextPart(text="Hello! How can I assist you today?")],
+        ),
+    )
+    event2 = AgentRunCompleted(
+        event_id=f"evt_{generate_uuid_hex()}",
+        thread_id=thread_id,
+        run_id=run_id,
+        sequence=2,
+        created_at=get_current_ts(),
+        output_ids=[event1.output.output_id],
+    )
+
+    mock_agent_client = DummyMockAIAgentClient(run_id=run_id, events=[event1, event2])
+    client.app.dependency_overrides[get_ai_agent_client] = lambda: mock_agent_client
+
+    try:
+        payload = {"content": "Hello AI Assistant"}
+        response = client.post(
+            f"https://testserver/api/v1/chat/sessions/{session_id}/messages",
+            json=payload,
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert "text/event-stream" in response.headers["content-type"]
+
+        # Parse SSE wire format
+        response_text = response.text
+        blocks = [b.strip() for b in response_text.split("\n\n") if b.strip()]
+        assert len(blocks) == 2
+
+        # Validate Block 1 (agent.output_produced)
+        lines1 = blocks[0].split("\n")
+        assert lines1[0] == f"event: {event1.kind.value}"
+        assert lines1[1].startswith("data: ")
+        data1 = json.loads(lines1[1][6:])
+        assert data1["event_id"] == event1.event_id
+        assert data1["kind"] == "agent.output_produced"
+        assert data1["output"]["parts"][0]["text"] == "Hello! How can I assist you today?"
+
+        # Validate Block 2 (agent.run_completed)
+        lines2 = blocks[1].split("\n")
+        assert lines2[0] == f"event: {event2.kind.value}"
+        assert lines2[1].startswith("data: ")
+        data2 = json.loads(lines2[1][6:])
+        assert data2["event_id"] == event2.event_id
+        assert data2["kind"] == "agent.run_completed"
+
+        # DB Record Assertions
+        thread_record = db_session.exec(
+            select(ChatThread).where(ChatThread.chat_session_id == session_id)
+        ).first()
+        assert thread_record is not None
+        assert thread_record.chat_session_id == session_id
+
+        run_record = db_session.exec(
+            select(ThreadRun).where(ThreadRun.run_id == run_id)
+        ).first()
+        assert run_record is not None
+        assert run_record.chat_session_id == session_id
+
+        messages = db_session.exec(
+            select(ChatMessage)
+            .where(ChatMessage.chat_session_id == session_id)
+            .order_by(ChatMessage.sequence.asc())
+        ).all()
+        assert len(messages) == 3
+        # Message 0: User Message
+        assert messages[0].sender_type == 1  # USER
+        assert messages[0].event_kind == "user_message"
+        user_payload_data = json.loads(messages[0].payload_json)
+        assert user_payload_data["content"] == "Hello AI Assistant"
+
+        # Message 1: Agent Output Produced
+        assert messages[1].sender_type == 2  # AGENT
+        assert messages[1].event_kind == "agent.output_produced"
+        agent_payload_1 = json.loads(messages[1].payload_json)
+        assert agent_payload_1["event_id"] == event1.event_id
+        assert agent_payload_1["kind"] == "agent.output_produced"
+        assert agent_payload_1["output"]["parts"][0]["text"] == "Hello! How can I assist you today?"
+
+        # Message 2: System Run Completed
+        assert messages[2].sender_type == 3  # SYSTEM
+        assert messages[2].event_kind == "agent.run_completed"
+        agent_payload_2 = json.loads(messages[2].payload_json)
+        assert agent_payload_2["event_id"] == event2.event_id
+        assert agent_payload_2["kind"] == "agent.run_completed"
+
+    finally:
+        client.app.dependency_overrides.pop(get_ai_agent_client, None)
+
+
+def test_send_chat_message_thread_reuse(client, db_session: Session):
+    """
+    Test that send_chat_message reuses existing latest ChatThread record
+    for the given session, hitting idx_chatthread_session_create index (create_ts DESC).
+    """
+    login_user_client(client)
+    from utils.commons import generate_uuid_hex, get_current_ts
+
+    user = db_session.exec(select(User).where(User.email == TEST_USER_EMAIL)).first()
+    session_id = f"cs_{generate_uuid_hex()}"
+    cs = ChatSession(
+        chat_session_id=session_id,
+        tenant_id=user.tenant_id,
+        user_id=user.user_id,
+        title="Test Thread Reuse Session",
+        status=ModelChatSessionStatus.ACTIVE,
+        create_ts=get_current_ts(),
+        update_ts=get_current_ts(),
+    )
+    db_session.add(cs)
+
+    # Insert older and newer threads
+    old_thread_id = f"thread_old_{generate_uuid_hex()}"
+    new_thread_id = f"thread_new_{generate_uuid_hex()}"
+    t_old = ChatThread(
+        thread_id=old_thread_id,
+        chat_session_id=session_id,
+        tenant_id=user.tenant_id,
+        user_id=user.user_id,
+        create_ts=get_current_ts() - 100,
+        update_ts=get_current_ts() - 100,
+    )
+    t_new = ChatThread(
+        thread_id=new_thread_id,
+        chat_session_id=session_id,
+        tenant_id=user.tenant_id,
+        user_id=user.user_id,
+        create_ts=get_current_ts(),
+        update_ts=get_current_ts(),
+    )
+    db_session.add_all([t_old, t_new])
+    db_session.commit()
+
+    run_id = f"run_{generate_uuid_hex()}"
+    event = AgentRunCompleted(
+        event_id=f"evt_{generate_uuid_hex()}",
+        thread_id=new_thread_id,
+        run_id=run_id,
+        sequence=1,
+        created_at=get_current_ts(),
+        output_ids=[],
+    )
+    mock_agent_client = DummyMockAIAgentClient(run_id=run_id, events=[event])
+    client.app.dependency_overrides[get_ai_agent_client] = lambda: mock_agent_client
+
+    try:
+        response = client.post(
+            f"https://testserver/api/v1/chat/sessions/{session_id}/messages",
+            json={"content": "Reuse thread check"},
+        )
+        assert response.status_code == status.HTTP_200_OK
+
+        # Verify DB ThreadRun uses new_thread_id
+        run_record = db_session.exec(
+            select(ThreadRun).where(ThreadRun.run_id == run_id)
+        ).first()
+        assert run_record is not None
+        assert run_record.thread_id == new_thread_id
+
+    finally:
+        client.app.dependency_overrides.pop(get_ai_agent_client, None)
+
+
+def test_send_chat_message_session_not_found(client):
+    """
+    Test sending chat message to a non-existent session_id.
+    Should fail during pre-stream preparation steps 1-4 and return HTTP 500 Internal Server Error
+    (instead of an SSE stream).
+    """
+    login_user_client(client)
+    non_existent_session_id = "cs_non_existent_12345"
+    response = client.post(
+        f"https://testserver/api/v1/chat/sessions/{non_existent_session_id}/messages",
+        json={"content": "Hello in non existent session"},
+    )
+    assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+    assert response.json()["detail"] == "Chat session not found or access denied"
+
+
+def test_project_schema_id_known_and_unknown():
+    """
+    Test ChatEventProjector.project_schema_id:
+    1. Valid domain schema_id maps to corresponding WebStructuredDataSchemaId.
+    2. Unknown domain schema_id maps to WebStructuredDataSchemaId.UNKNOWN and logs error.
+    """
+    from app.services.chat_event_projector import ChatEventProjector
+    from app.schemas.chat_msg_payload import WebStructuredDataSchemaId
+
+    # Known schema_id
+    res_known = ChatEventProjector.project_schema_id("ecommerce.user_result.v1")
+    assert res_known == WebStructuredDataSchemaId.ECOMMERCE_USER_RESULT_V1
+
+    # Unmapped schema_id fallback
+    res_unknown = ChatEventProjector.project_schema_id("future.new_unmapped_schema.v99")
+    assert res_unknown == WebStructuredDataSchemaId.UNKNOWN
+
+
+def test_user_payload_schemas_and_projector():
+    """
+    Test user input payload schemas:
+    1. WebChatUserPayload (kind="user_message")
+    2. WebUserResumePayload (kind="user_resume")
+    """
+    from app.services.chat_event_projector import ChatEventProjector
+    from app.schemas.chat_msg_payload import WebUserEventKind, WebChatUserPayload, WebUserResumePayload
+
+    # Test user text message payload
+    user_msg_payload = ChatEventProjector.project_user_message("Hello assist")
+    assert isinstance(user_msg_payload, WebChatUserPayload)
+    assert user_msg_payload.kind == WebUserEventKind.USER_MESSAGE
+    assert user_msg_payload.content == "Hello assist"
+
+    # Test user resume payload
+    user_resume_payload = ChatEventProjector.project_user_resume(
+        interrupt_id="intr_123",
+        action="confirm",
+        response_data={"approved": True},
+    )
+    assert isinstance(user_resume_payload, WebUserResumePayload)
+    assert user_resume_payload.kind == WebUserEventKind.USER_RESUME
+    assert user_resume_payload.interrupt_id == "intr_123"
+    assert user_resume_payload.action == "confirm"
+    assert user_resume_payload.response_data == {"approved": True}
+
+
+
+
+
 
