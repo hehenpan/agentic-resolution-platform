@@ -8,7 +8,9 @@ from app.services.user_service import UserService
 from app.services.rbac_service import RBACServiceBase,RBACServiceSimple
 from app.services.file_service import FileService
 from app.services.chat_service import ChatService
+from microservice_client.ai_agent_client import AIAgentServerInterface
 from app.core.constants import SESSION_INFO_KEY
+
 from app.middleware.middleware import safe_get_context
 
 def get_db(request: Request):
@@ -72,5 +74,14 @@ def get_chat_service(db: Session = Depends(get_db)) -> ChatService:
     Dependency to get ChatService instance.
     """
     return ChatService(dbsession=db)
+
+
+def get_ai_agent_client() -> AIAgentServerInterface:
+    """
+    Dependency to get AIAgentServerInterface instance.
+    """
+    from microservice_client.ai_agent_client import get_ai_agent_server_client
+    return get_ai_agent_server_client()
+
 
 

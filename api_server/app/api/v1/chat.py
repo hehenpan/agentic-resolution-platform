@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
-from app.api.deps import get_current_user, get_chat_service
+from fastapi.responses import StreamingResponse
+from app.api.deps import get_current_user, get_chat_service, get_ai_agent_client
 from app.models.models import User
 from app.schemas.common import BizCode
 from app.schemas.chat import (
@@ -14,9 +15,12 @@ from app.schemas.chat import (
     ChatMessageItem,
     ChatMessageListResponseData,
     ChatMessageListResponse,
+    SendChatMessageRequest,
 )
 from app.services.chat_service import ChatService
+from microservice_client.ai_agent_client import AIAgentServerInterface
 from loguru import logger
+
 
 chat_router = APIRouter(prefix="/chat", tags=["chat"])
 
@@ -188,4 +192,58 @@ async def list_chat_messages(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to query chat history messages",
         )
+
+
+@chat_router.post(
+    "/sessions/{chat_session_id}/messages",
+    status_code=status.HTTP_200_OK,
+    summary="Send Message in Chat Session and Stream Response via SSE"
+)
+async def send_chat_message(
+    chat_session_id: str = Path(..., description="Unique business chat session string ID."),
+    request: SendChatMessageRequest = ...,
+    current_user: User = Depends(get_current_user),
+    chat_service: ChatService = Depends(get_chat_service),
+    ai_agent_client: AIAgentServerInterface = Depends(get_ai_agent_client),
+):
+    """
+    1. Receive user message content and metadata.
+    2. Call chat_service.prepare_chat_turn to perform pre-stream initialization (steps 1-4).
+    3. Check result: If failed, Router raises appropriate HTTP exception (404/500).
+    4. If success, start step 5 SSE stream and return StreamingResponse.
+    """
+    prep_result = await chat_service.prepare_chat_turn(
+        chat_session_id=chat_session_id,
+        current_user=current_user,
+        message_content=request.content,
+        ai_agent_client=ai_agent_client,
+    )
+    if not prep_result.is_success:
+        logger.error(
+            f"Failed to prepare chat turn: chat_session_id={chat_session_id}, "
+            f"user_id={current_user.user_id}, error={prep_result.error_message}"
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=prep_result.error_message,
+        )
+
+    event_generator = chat_service.stream_agent_turn(
+        chat_session_id=chat_session_id,
+        thread_id=prep_result.thread_id,
+        run_id=prep_result.run_id,
+        message_content=request.content,
+        ai_agent_client=ai_agent_client,
+    )
+    return StreamingResponse(
+        event_generator,
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
 

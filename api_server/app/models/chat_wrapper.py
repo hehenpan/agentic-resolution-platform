@@ -1,7 +1,15 @@
 from sqlmodel import Session, select, func, or_, and_
-from app.models.models import ChatSession, ChatSessionStatus, ChatMessage
+from app.models.models import (
+    ChatSession,
+    ChatSessionStatus,
+    ChatMessage,
+    ChatThread,
+    ChatThreadStatus,
+    ThreadRun,
+)
 from utils.commons import generate_uuid_hex, get_current_ts
 from loguru import logger
+
 
 
 class ChatDBWrapper:
@@ -153,4 +161,126 @@ class ChatDBWrapper:
                 f"Database error while listing ChatMessages: chat_session_id={chat_session_id}, error={e}"
             )
             raise e
+
+    def get_chat_session_by_id(
+        self,
+        chat_session_id: str,
+        tenant_id: int,
+        user_id: int,
+    ) -> ChatSession | None:
+        """Query ChatSession by chat_session_id, tenant_id, and user_id."""
+        try:
+            query_stmt = select(ChatSession).where(
+                ChatSession.chat_session_id == chat_session_id,
+                ChatSession.tenant_id == tenant_id,
+                ChatSession.user_id == user_id,
+                ChatSession.status != ChatSessionStatus.INVALID,
+            )
+            return self.db.exec(query_stmt).first()
+        except Exception as e:
+            logger.exception(
+                f"Database error while querying ChatSession: chat_session_id={chat_session_id}, error={e}"
+            )
+            raise e
+
+    def get_latest_thread_by_session(self, chat_session_id: str) -> ChatThread | None:
+        """
+        Query the latest ChatThread record for a session using index
+        idx_chatthread_session_create (chat_session_id, create_ts).
+        Returns the record ordered by create_ts DESC.
+        """
+        try:
+            query_stmt = (
+                select(ChatThread)
+                .where(ChatThread.chat_session_id == chat_session_id)
+                .order_by(ChatThread.create_ts.desc())
+                .limit(1)
+            )
+            return self.db.exec(query_stmt).first()
+        except Exception as e:
+            logger.exception(
+                f"Database error while querying latest ChatThread: chat_session_id={chat_session_id}, error={e}"
+            )
+            raise e
+
+    def create_chat_thread(
+        self,
+        chat_session_id: str,
+        tenant_id: int,
+        user_id: int,
+        thread_id: str,
+    ) -> ChatThread:
+        """Insert a new ChatThread record into database."""
+        now_ts = get_current_ts()
+        chat_thread = ChatThread(
+            thread_id=thread_id,
+            chat_session_id=chat_session_id,
+            tenant_id=tenant_id,
+            user_id=user_id,
+            status=ChatThreadStatus.ACTIVE,
+            create_ts=now_ts,
+            update_ts=now_ts,
+        )
+        try:
+            self.db.add(chat_thread)
+            self.db.commit()
+            self.db.refresh(chat_thread)
+            logger.info(
+                f"Successfully created ChatThread in DB: thread_id={thread_id}, chat_session_id={chat_session_id}"
+            )
+            return chat_thread
+        except Exception as e:
+            self.db.rollback()
+            logger.exception(
+                f"Database error while creating ChatThread: chat_session_id={chat_session_id}, error={e}"
+            )
+            raise e
+
+    def create_thread_run(
+        self,
+        run_id: str,
+        thread_id: str,
+        chat_session_id: str,
+    ) -> ThreadRun:
+        """Insert a new ThreadRun record into database."""
+        now_ts = get_current_ts()
+        thread_run = ThreadRun(
+            run_id=run_id,
+            thread_id=thread_id,
+            chat_session_id=chat_session_id,
+            create_ts=now_ts,
+        )
+        try:
+            self.db.add(thread_run)
+            self.db.commit()
+            self.db.refresh(thread_run)
+            logger.info(
+                f"Successfully created ThreadRun in DB: run_id={run_id}, thread_id={thread_id}"
+            )
+            return thread_run
+        except Exception as e:
+            self.db.rollback()
+            logger.exception(
+                f"Database error while creating ThreadRun: run_id={run_id}, thread_id={thread_id}, error={e}"
+            )
+            raise e
+
+    def save_chat_message(self, message: ChatMessage) -> ChatMessage:
+        """Insert a ChatMessage record into database."""
+        try:
+            self.db.add(message)
+            self.db.commit()
+            self.db.refresh(message)
+            logger.info(
+                f"Successfully saved ChatMessage in DB: event_id={message.event_id}, "
+                f"event_kind={message.event_kind}, chat_session_id={message.chat_session_id}"
+            )
+            return message
+        except Exception as e:
+            self.db.rollback()
+            logger.exception(
+                f"Database error while saving ChatMessage: event_id={message.event_id}, error={e}"
+            )
+            raise e
+
 
