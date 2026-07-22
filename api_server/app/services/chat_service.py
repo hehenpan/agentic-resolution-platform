@@ -11,6 +11,10 @@ from app.schemas.chat_msg_payload import (
     WebHumanInputSchemaId,
     WebGetUserByEmailInputModel,
     WebGetOrdersByEmailInputModel,
+    WebGetOrderDetailsByOrderIdInputModel,
+    WebGetReturnsByOrderIdInputModel,
+    WebGetReturnsByCustomerIdInputModel,
+    WebCreateReturnRequestInputModel,
 )
 from app.services.chat_event_projector import ChatEventProjector
 from ai_agent_sdk import AgentAssistantId
@@ -32,6 +36,10 @@ from loguru import logger
 RESUME_INPUT_MODEL_MAP: dict[WebHumanInputSchemaId, type[BaseModel]] = {
     WebHumanInputSchemaId.GET_ORDERS_INPUT_V1: WebGetOrdersByEmailInputModel,
     WebHumanInputSchemaId.GET_USER_INPUT_V1: WebGetUserByEmailInputModel,
+    WebHumanInputSchemaId.GET_ORDER_DETAILS_INPUT_V1: WebGetOrderDetailsByOrderIdInputModel,
+    WebHumanInputSchemaId.GET_RETURNS_BY_ORDER_INPUT_V1: WebGetReturnsByOrderIdInputModel,
+    WebHumanInputSchemaId.GET_RETURNS_BY_CUSTOMER_INPUT_V1: WebGetReturnsByCustomerIdInputModel,
+    WebHumanInputSchemaId.CREATE_RETURN_REQUEST_INPUT_V1: WebCreateReturnRequestInputModel,
 }
 
 

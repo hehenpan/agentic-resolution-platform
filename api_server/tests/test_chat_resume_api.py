@@ -321,3 +321,107 @@ def test_resume_chat_message_path_mismatch(client: TestClient, db_session: Sessi
     )
     assert res.status_code == 400
     assert "does not match" in res.json()["detail"]
+
+
+@pytest.mark.parametrize(
+    "schema_id, resume_payload",
+    [
+        (WebHumanInputSchemaId.GET_USER_INPUT_V1.value, {"email": "user@example.com"}),
+        (WebHumanInputSchemaId.GET_ORDERS_INPUT_V1.value, {"email": "user@example.com"}),
+        (WebHumanInputSchemaId.GET_ORDER_DETAILS_INPUT_V1.value, {"order_id": 101}),
+        (WebHumanInputSchemaId.GET_RETURNS_BY_ORDER_INPUT_V1.value, {"order_id": 101}),
+        (WebHumanInputSchemaId.GET_RETURNS_BY_CUSTOMER_INPUT_V1.value, {"customer_id": 501}),
+        (
+            WebHumanInputSchemaId.CREATE_RETURN_REQUEST_INPUT_V1.value,
+            {"order_id": 101, "customer_id": 501, "reason_code": "damaged"},
+        ),
+    ],
+)
+def test_all_interrupt_schemas_supported_in_resume(
+    client: TestClient, db_session: Session, schema_id: str, resume_payload: dict
+):
+    """Verify that all 6 interrupt schemas are properly registered and supported during resume."""
+    login_user_client(client)
+
+    user = db_session.exec(select(User).where(User.email == TEST_USER_EMAIL)).first()
+    session_id = f"cs_{generate_uuid_hex()}"
+    thread_id = f"thread_{generate_uuid_hex()}"
+    run_id_1 = f"run_{generate_uuid_hex()}"
+    run_id_2 = f"run_{generate_uuid_hex()}"
+    interrupt_id = f"intr_{generate_uuid_hex()}"
+
+    cs = ChatSession(
+        chat_session_id=session_id,
+        tenant_id=user.tenant_id,
+        user_id=user.user_id,
+        title="All Schemas Resume Test",
+        status=ChatSessionStatus.ACTIVE,
+        create_ts=get_current_ts(),
+        update_ts=get_current_ts(),
+    )
+    db_session.add(cs)
+    db_session.commit()
+
+    domain_interrupt_event = HumanInputRequested(
+        event_id=f"evt_{generate_uuid_hex()}",
+        thread_id=thread_id,
+        run_id=run_id_1,
+        sequence=1,
+        created_at=get_current_ts(),
+        interrupt_id=interrupt_id,
+        request=HumanInputRequest(
+            prompt="Interrupt test prompt",
+            schema_id=schema_id,
+            input_schema={},
+        ),
+        resume_cursor=AgentResumeCursor(
+            checkpoint_id="cp_test_456",
+            checkpoint_ns="",
+            checkpoint_map={},
+        ),
+    )
+    db_msg = ChatMessage(
+        event_id=domain_interrupt_event.event_id,
+        chat_session_id=session_id,
+        thread_id=thread_id,
+        run_id=run_id_1,
+        sender_type=ChatMessageSenderType.AGENT,
+        event_kind="agent.human_input_requested",
+        sequence=1,
+        payload_json=domain_interrupt_event.model_dump_json(),
+    )
+    db_session.add(db_msg)
+    db_session.commit()
+
+    completed_event = AgentRunCompleted(
+        event_id=f"evt_{generate_uuid_hex()}",
+        thread_id=thread_id,
+        run_id=run_id_2,
+        sequence=1,
+        created_at=get_current_ts(),
+        output_ids=[],
+    )
+
+    mock_client = MockResumeAIAgentClient(
+        mock_run_id=run_id_2,
+        mock_events=[completed_event],
+    )
+    app.dependency_overrides[get_ai_agent_client] = lambda: mock_client
+
+    try:
+        req_payload = {
+            "chat_session_id": session_id,
+            "thread_id": thread_id,
+            "schema_id": schema_id,
+            "resume_payload": resume_payload,
+        }
+        res = client.post(
+            f"https://testserver/api/v1/chat/sessions/{session_id}/resume",
+            json=req_payload,
+        )
+        assert res.status_code == 200
+        assert mock_client.received_resume_request is not None
+        assert mock_client.received_resume_request.response.schema_id == schema_id
+    finally:
+        app.dependency_overrides.clear()
+
