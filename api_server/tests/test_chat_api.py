@@ -593,7 +593,7 @@ def test_user_payload_schemas_and_projector():
     2. WebUserResumePayload (kind="user_resume")
     """
     from app.services.chat_event_projector import ChatEventProjector
-    from app.schemas.chat_msg_payload import WebUserEventKind, WebChatUserPayload, WebUserResumePayload
+    from app.schemas.chat_msg_payload import WebUserEventKind, WebChatUserPayload, WebUserResumePayload, WebHumanInputSchemaId
 
     # Test user text message payload
     user_msg_payload = ChatEventProjector.project_user_message("Hello assist")
@@ -604,14 +604,38 @@ def test_user_payload_schemas_and_projector():
     # Test user resume payload
     user_resume_payload = ChatEventProjector.project_user_resume(
         interrupt_id="intr_123",
+        schema_id="human_input.get_orders.v1",
         action="confirm",
         response_data={"approved": True},
     )
     assert isinstance(user_resume_payload, WebUserResumePayload)
     assert user_resume_payload.kind == WebUserEventKind.USER_RESUME
     assert user_resume_payload.interrupt_id == "intr_123"
+    assert user_resume_payload.schema_id == WebHumanInputSchemaId.GET_ORDERS_INPUT_V1
     assert user_resume_payload.action == "confirm"
     assert user_resume_payload.response_data == {"approved": True}
+
+
+def test_project_web_input_to_domain_input():
+    """
+    Test Anti-Corruption Layer: ChatEventProjector.project_web_input_to_domain_input
+    transforms Web DTO models to downstream ai_agent domain models.
+    """
+    from app.services.chat_event_projector import ChatEventProjector
+    from app.schemas.chat_msg_payload import (
+        WebHumanInputSchemaId,
+        WebGetUserByEmailInputModel,
+    )
+    from shared_common.schemas.ai_agent import GetUserByEmailInputModel
+
+    web_input = WebGetUserByEmailInputModel(email="test@example.com", llm_text=None)
+    domain_input = ChatEventProjector.project_web_input_to_domain_input(
+        schema_id=WebHumanInputSchemaId.GET_USER_INPUT_V1,
+        web_input=web_input,
+    )
+
+    assert isinstance(domain_input, GetUserByEmailInputModel)
+    assert domain_input.email == "test@example.com"
 
 
 def test_project_human_input_schema_id_known_and_unknown():

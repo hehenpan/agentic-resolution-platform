@@ -16,10 +16,12 @@ from app.schemas.chat import (
     ChatMessageListResponseData,
     ChatMessageListResponse,
     SendChatMessageRequest,
+    ResumeChatMessageRequest,
 )
 from app.services.chat_service import ChatService
 from microservice_client.ai_agent_client import AIAgentServerInterface
 from loguru import logger
+
 
 
 chat_router = APIRouter(prefix="/chat", tags=["chat"])
@@ -244,6 +246,80 @@ async def send_chat_message(
             "X-Accel-Buffering": "no",
         },
     )
+
+
+@chat_router.post(
+    "/sessions/{chat_session_id}/resume",
+    status_code=status.HTTP_200_OK,
+    summary="Resume Interrupted Chat Session Turn and Stream Response via SSE"
+)
+async def resume_chat_message(
+    chat_session_id: str = Path(..., description="Unique business chat session string ID."),
+    request: ResumeChatMessageRequest = ...,
+    current_user: User = Depends(get_current_user),
+    chat_service: ChatService = Depends(get_chat_service),
+    ai_agent_client: AIAgentServerInterface = Depends(get_ai_agent_client),
+):
+    """
+    1. Validate resume payload and schema_id.
+    2. Extract latest interrupt_id and resume_cursor from DB.
+    3. Save user resume input message to chat_message table.
+    4. Call ai_agent_sdk resume_turn and stream response events via SSE.
+    """
+    if request.chat_session_id != chat_session_id:
+        logger.error(
+            f"Path parameter chat_session_id '{chat_session_id}' mismatch with body chat_session_id '{request.chat_session_id}'"
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="chat_session_id in path does not match request body",
+        )
+
+    prep_result = await chat_service.prepare_resume_turn(
+        chat_session_id=chat_session_id,
+        thread_id=request.thread_id,
+        schema_id=request.schema_id,
+        resume_payload=request.resume_payload,
+        current_user=current_user,
+        ai_agent_client=ai_agent_client,
+        explicit_interrupt_id=request.interrupt_id,
+    )
+    if not prep_result.is_success:
+        logger.error(
+            f"Failed to prepare resume turn: chat_session_id={chat_session_id}, "
+            f"user_id={current_user.user_id}, error={prep_result.error_message}"
+        )
+        err_msg = (prep_result.error_message or "").lower()
+        status_code = (
+            status.HTTP_400_BAD_REQUEST
+            if "not found" in err_msg or "no pending interrupt" in err_msg or "invalid" in err_msg or "unsupported" in err_msg
+            else status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+        raise HTTPException(
+            status_code=status_code,
+            detail=prep_result.error_message,
+        )
+
+    event_generator = chat_service.stream_resume_agent_turn(
+        chat_session_id=chat_session_id,
+        thread_id=prep_result.thread_id,
+        run_id=prep_result.run_id,
+        interrupt_id=prep_result.interrupt_id,
+        resume_cursor=prep_result.resume_cursor,
+        schema_id=request.schema_id,
+        validated_input=prep_result.validated_input,
+        ai_agent_client=ai_agent_client,
+    )
+    return StreamingResponse(
+        event_generator,
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
 
 
 

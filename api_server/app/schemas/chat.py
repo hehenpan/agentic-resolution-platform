@@ -2,6 +2,7 @@ import json
 from enum import Enum
 from typing import Any
 from pydantic import BaseModel, Field
+from app.schemas.chat_msg_payload import WebHumanInputSchemaId
 from app.schemas.common import ResponseBase, BizCode
 
 
@@ -95,6 +96,31 @@ class ChatMessageListResponse(ResponseBase):
 class SendChatMessageRequest(BaseModel):
     """Request payload for sending a user chat message."""
     content: str = Field(..., description="Message text content sent by the user.", min_length=1)
+
+
+class ResumeChatMessageRequest(BaseModel):
+    """Request payload for resuming an interrupted chat session turn."""
+    schema_id: WebHumanInputSchemaId = Field(
+        ...,
+        description="Schema identifier defining the structure of resume_payload. e.g. human_input.get_orders.v1",
+    )
+    resume_payload: dict[str, Any] = Field(
+        ...,
+        description="User input payload dictionary to resolve the interrupt.",
+    )
+    chat_session_id: str = Field(
+        ...,
+        description="Unique business chat session identifier.",
+    )
+    thread_id: str = Field(
+        ...,
+        description="LangGraph thread identifier bound to the session.",
+    )
+    interrupt_id: str | None = Field(
+        default=None,
+        description="Optional explicit interrupt ID. If omitted, server automatically fetches the latest interrupt from DB.",
+    )
+
 
 
 class ChatSSEEventType(str, Enum):

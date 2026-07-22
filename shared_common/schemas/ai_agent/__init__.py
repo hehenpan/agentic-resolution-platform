@@ -31,6 +31,14 @@ from shared_common.schemas.ai_agent.human_input import (
     HumanInputRequest,
     HumanInputResponse,
 )
+from shared_common.schemas.ai_agent.human_input_schemas import (
+    GetUserByEmailInputModel,
+    GetOrdersByEmailInputModel,
+    GetOrderDetailsByOrderIdInputModel,
+    GetReturnsByOrderIdInputModel,
+    GetReturnsByCustomerIdInputModel,
+    CreateReturnRequestInputModel,
+)
 from shared_common.schemas.ai_agent.outputs import (
     AgentOutput,
     AgentOutputPart,
