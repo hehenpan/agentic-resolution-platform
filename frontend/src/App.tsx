@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Header } from './components/common/Header';
 import { Sidebar } from './components/common/Sidebar';
 import { WorkbenchPage } from './pages/WorkbenchPage';
+import { LoginModal } from './components/auth/LoginModal';
+import { useAuthStore } from './store/authStore';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -15,6 +17,11 @@ const queryClient = new QueryClient({
 
 export const App: React.FC = () => {
   const [darkMode, setDarkMode] = useState(true);
+  const { isAuthenticated, checkAuth } = useAuthStore();
+
+  useEffect(() => {
+    checkAuth();
+  }, [checkAuth]);
 
   const toggleTheme = () => {
     setDarkMode(!darkMode);
@@ -24,9 +31,16 @@ export const App: React.FC = () => {
     <QueryClientProvider client={queryClient}>
       <div className={`min-h-screen flex flex-col ${darkMode ? 'dark' : 'light'}`}>
         <Header darkMode={darkMode} onToggleTheme={toggleTheme} />
-        <div className="flex-1 flex overflow-hidden">
-          <Sidebar />
-          <WorkbenchPage />
+        
+        <div className="flex-1 flex overflow-hidden relative">
+          {!isAuthenticated ? (
+            <LoginModal />
+          ) : (
+            <>
+              <Sidebar />
+              <WorkbenchPage />
+            </>
+          )}
         </div>
       </div>
     </QueryClientProvider>

@@ -1,5 +1,6 @@
 import React from 'react';
-import { Bot, Cpu, Moon, Sun } from 'lucide-react';
+import { Bot, Cpu, Moon, Sun, LogOut, User } from 'lucide-react';
+import { useAuthStore } from '../../store/authStore';
 
 interface HeaderProps {
   darkMode: boolean;
@@ -7,6 +8,8 @@ interface HeaderProps {
 }
 
 export const Header: React.FC<HeaderProps> = ({ darkMode, onToggleTheme }) => {
+  const { isAuthenticated, userEmail, logout } = useAuthStore();
+
   return (
     <header className="h-16 border-b border-border glass-panel px-6 flex items-center justify-between z-10">
       <div className="flex items-center space-x-3">
@@ -30,6 +33,23 @@ export const Header: React.FC<HeaderProps> = ({ darkMode, onToggleTheme }) => {
           <Cpu className="w-3.5 h-3.5" />
           <span>FastAPI Connected</span>
         </div>
+
+        {isAuthenticated && (
+          <div className="flex items-center space-x-3 border-l border-border pl-4">
+            <div className="flex items-center space-x-2 text-xs text-slate-300 bg-slate-800/60 px-2.5 py-1.5 rounded-lg border border-slate-700/50">
+              <User className="w-3.5 h-3.5 text-blue-400" />
+              <span>{userEmail || 'Authenticated User'}</span>
+            </div>
+            <button
+              onClick={() => logout()}
+              className="flex items-center space-x-1.5 text-xs text-rose-400 hover:text-rose-300 bg-rose-500/10 hover:bg-rose-500/20 px-2.5 py-1.5 rounded-lg border border-rose-500/20 transition-colors"
+              title="Sign Out"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span>Logout</span>
+            </button>
+          </div>
+        )}
 
         <button
           onClick={onToggleTheme}
