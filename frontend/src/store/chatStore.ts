@@ -1,124 +1,147 @@
 import { create } from 'zustand';
-import type { ChatSession, ChatMessage, InterruptEventData } from '../types/chat';
+import type { ChatSessionMeta, ChatMessage, InterruptEventData } from '../types/chat';
+import { chatService } from '../services/chatService';
 
 interface ChatStoreState {
-  sessions: ChatSession[];
-  activeThreadId: string;
+  sessions: ChatSessionMeta[];
+  sessionMessages: Record<string, ChatMessage[]>;
+  activeChatSessionId: string | null;
+  isLoadingSessions: boolean;
   isStreaming: boolean;
   activeInterrupt: InterruptEventData | null;
-  
+  error: string | null;
+
   // Actions
-  setActiveThread: (threadId: string) => void;
-  createNewThread: () => string;
-  addMessage: (threadId: string, message: ChatMessage) => void;
-  updateMessageContent: (threadId: string, messageId: string, contentDelta: string) => void;
-  setMessageStatus: (threadId: string, messageId: string, status: ChatMessage['status']) => void;
+  fetchSessions: () => Promise<void>;
+  createSession: (title?: string) => Promise<string | null>;
+  setActiveChatSession: (chatSessionId: string | null) => void;
+  addMessage: (chatSessionId: string, message: ChatMessage) => void;
+  updateMessageContent: (chatSessionId: string, messageId: string, contentDelta: string) => void;
+  setMessageStatus: (chatSessionId: string, messageId: string, status: ChatMessage['status']) => void;
   setStreaming: (isStreaming: boolean) => void;
   setActiveInterrupt: (interrupt: InterruptEventData | null) => void;
-  setSessions: (sessions: ChatSession[]) => void;
 }
 
-export const useChatStore = create<ChatStoreState>((set) => ({
-  sessions: [
-    {
-      threadId: 'thread_demo_001',
-      title: 'Policy QA & Resolution Workbench',
-      lastUpdated: new Date().toISOString(),
-      status: 'success',
-      messages: [
-        {
-          id: 'msg_1',
-          role: 'user',
-          content: 'Hello, please review refund order #99182.',
-          timestamp: new Date(Date.now() - 3600000).toISOString(),
-          status: 'completed',
-        },
-        {
-          id: 'msg_2',
-          role: 'assistant',
-          content: 'I have retrieved the policy for order #99182. All conditions are satisfied.',
-          timestamp: new Date(Date.now() - 3500000).toISOString(),
-          status: 'completed',
-          toolCalls: [
-            {
-              name: 'query_policy_db',
-              args: { order_id: '99182' },
-              result: 'Found active return window (14 days remaining).',
-            },
-          ],
-        },
-      ],
-    },
-  ],
-  activeThreadId: 'thread_demo_001',
+export const useChatStore = create<ChatStoreState>((set, get) => ({
+  sessions: [],
+  sessionMessages: {},
+  activeChatSessionId: null,
+  isLoadingSessions: false,
   isStreaming: false,
   activeInterrupt: null,
+  error: null,
 
-  setActiveThread: (threadId) => set({ activeThreadId: threadId }),
-
-  createNewThread: () => {
-    const newThreadId = `thread_${Date.now()}`;
-    const newSession: ChatSession = {
-      threadId: newThreadId,
-      title: 'New Resolution Workspace',
-      lastUpdated: new Date().toISOString(),
-      status: 'pending',
-      messages: [],
-    };
-    set((state) => ({
-      sessions: [newSession, ...state.sessions],
-      activeThreadId: newThreadId,
-    }));
-    return newThreadId;
+  fetchSessions: async () => {
+    set({ isLoadingSessions: true, error: null });
+    try {
+      const res = await chatService.listSessions();
+      if (res.code === 0 && res.data) {
+        set({
+          sessions: res.data.items || [],
+          isLoadingSessions: false,
+        });
+      } else {
+        set({ isLoadingSessions: false, error: res.message || 'Failed to list chat sessions' });
+      }
+    } catch (err: unknown) {
+      set({
+        isLoadingSessions: false,
+      });
+    }
   },
 
-  addMessage: (threadId, message) => {
-    set((state) => ({
-      sessions: state.sessions.map((session) => {
-        if (session.threadId !== threadId) return session;
+  createSession: async (title?: string): Promise<string | null> => {
+    try {
+      const res = await chatService.createSession(title);
+      if (res.code === 0 && res.data?.session_info) {
+        const meta = res.data.session_info;
+        set((state) => ({
+          sessions: [meta, ...state.sessions],
+          activeChatSessionId: meta.chat_session_id,
+          sessionMessages: {
+            ...state.sessionMessages,
+            [meta.chat_session_id]: [],
+          },
+        }));
+        return meta.chat_session_id;
+      }
+      return null;
+    } catch (err: unknown) {
+      // Mock / fallback session creation
+      const newSessionId = `cs_mock_${Date.now()}`;
+      const newMeta: ChatSessionMeta = {
+        id: Date.now(),
+        chat_session_id: newSessionId,
+        tenant_id: 1,
+        user_id: 101,
+        title: title || 'New Chat Session',
+        status: 1,
+        create_ts: Math.floor(Date.now() / 1000),
+        update_ts: Math.floor(Date.now() / 1000),
+      };
+      set((state) => ({
+        sessions: [newMeta, ...state.sessions],
+        activeChatSessionId: newSessionId,
+        sessionMessages: {
+          ...state.sessionMessages,
+          [newSessionId]: [],
+        },
+      }));
+      return newSessionId;
+    }
+  },
+
+  setActiveChatSession: (chatSessionId: string | null) => {
+    set({ activeChatSessionId: chatSessionId });
+  },
+
+  addMessage: (chatSessionId: string, message: ChatMessage) => {
+    set((state) => {
+      const currentMsgs = state.sessionMessages[chatSessionId] || [];
+      return {
+        sessionMessages: {
+          ...state.sessionMessages,
+          [chatSessionId]: [...currentMsgs, message],
+        },
+      };
+    });
+  },
+
+  updateMessageContent: (chatSessionId: string, messageId: string, contentDelta: string) => {
+    set((state) => {
+      const currentMsgs = state.sessionMessages[chatSessionId] || [];
+      const updatedMsgs = currentMsgs.map((msg) => {
+        if (msg.id !== messageId) return msg;
         return {
-          ...session,
-          lastUpdated: new Date().toISOString(),
-          messages: [...session.messages, message],
+          ...msg,
+          content: msg.content + contentDelta,
         };
-      }),
-    }));
+      });
+      return {
+        sessionMessages: {
+          ...state.sessionMessages,
+          [chatSessionId]: updatedMsgs,
+        },
+      };
+    });
   },
 
-  updateMessageContent: (threadId, messageId, contentDelta) => {
-    set((state) => ({
-      sessions: state.sessions.map((session) => {
-        if (session.threadId !== threadId) return session;
-        return {
-          ...session,
-          messages: session.messages.map((msg) => {
-            if (msg.id !== messageId) return msg;
-            return {
-              ...msg,
-              content: msg.content + contentDelta,
-            };
-          }),
-        };
-      }),
-    }));
+  setMessageStatus: (chatSessionId: string, messageId: string, status: ChatMessage['status']) => {
+    set((state) => {
+      const currentMsgs = state.sessionMessages[chatSessionId] || [];
+      const updatedMsgs = currentMsgs.map((msg) => {
+        if (msg.id !== messageId) return msg;
+        return { ...msg, status };
+      });
+      return {
+        sessionMessages: {
+          ...state.sessionMessages,
+          [chatSessionId]: updatedMsgs,
+        },
+      };
+    });
   },
 
-  setMessageStatus: (threadId, messageId, status) => {
-    set((state) => ({
-      sessions: state.sessions.map((session) => {
-        if (session.threadId !== threadId) return session;
-        return {
-          ...session,
-          messages: session.messages.map((msg) => {
-            if (msg.id !== messageId) return msg;
-            return { ...msg, status };
-          }),
-        };
-      }),
-    }));
-  },
-
-  setStreaming: (isStreaming) => set({ isStreaming }),
-  setActiveInterrupt: (activeInterrupt) => set({ activeInterrupt }),
-  setSessions: (sessions) => set({ sessions }),
+  setStreaming: (isStreaming: boolean) => set({ isStreaming }),
+  setActiveInterrupt: (activeInterrupt: InterruptEventData | null) => set({ activeInterrupt }),
 }));

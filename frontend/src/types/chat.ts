@@ -2,6 +2,50 @@
 
 export type AgentRunStatus = 'pending' | 'running' | 'success' | 'error' | 'interrupted';
 
+export enum ChatSessionStatus {
+  INVALID = 0,
+  ACTIVE = 1,
+  CLOSED = 2,
+}
+
+export interface ChatSessionMeta {
+  id?: number | null;
+  chat_session_id: string;
+  tenant_id: number;
+  user_id: number;
+  title: string;
+  status: ChatSessionStatus;
+  create_ts: number;
+  update_ts: number;
+}
+
+export interface CreateChatSessionRequest {
+  title?: string | null;
+}
+
+export interface CreateChatSessionData {
+  chat_session_id: string;
+  session_info: ChatSessionMeta;
+}
+
+export interface CreateChatSessionResponse {
+  code: number;
+  message: string;
+  data: CreateChatSessionData;
+}
+
+export interface ChatSessionListResponseData {
+  has_more: boolean;
+  next_cursor?: string | null;
+  items: ChatSessionMeta[];
+}
+
+export interface ChatSessionListResponse {
+  code: number;
+  message: string;
+  data: ChatSessionListResponseData;
+}
+
 export interface UserMessageInput {
   content: string;
   metadata?: Record<string, unknown>;

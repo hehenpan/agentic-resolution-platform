@@ -5,6 +5,8 @@ import path from 'path'
 
 /** Custom Vite Mock Plugin for API Server endpoints (REST & SSE Stream) */
 function apiMockPlugin(): Plugin {
+  const mockSessionStore: unknown[] = [];
+
   return {
     name: 'vite-plugin-api-mock',
     configureServer(server) {
@@ -14,6 +16,80 @@ function apiMockPlugin(): Plugin {
         }
 
         const url = req.url || '';
+
+        // Mock POST /api/v1/auth/login
+        if (url.includes('/api/v1/auth/login') && req.method === 'POST') {
+          res.setHeader('Content-Type', 'application/json');
+          res.setHeader('Set-Cookie', `sessionid=mock_session_${Date.now()}; Path=/;`);
+          res.end(
+            JSON.stringify({
+              code: 0,
+              message: 'User logged in successfully',
+              data: {
+                tenant_id: 1,
+              },
+            })
+          );
+          return;
+        }
+
+        // Mock POST /api/v1/chat/sessions
+        if (url.includes('/api/v1/chat/sessions') && req.method === 'POST') {
+          res.setHeader('Content-Type', 'application/json');
+          let body = '';
+          req.on('data', (chunk) => {
+            body += chunk;
+          });
+          req.on('end', () => {
+            let title = 'New Chat';
+            try {
+              const parsed = JSON.parse(body);
+              if (parsed.title) title = parsed.title;
+            } catch {
+              // fallback
+            }
+            const chatSessionId = `cs_mock_${Date.now()}`;
+            const newSession = {
+              id: Date.now(),
+              chat_session_id: chatSessionId,
+              tenant_id: 1,
+              user_id: 101,
+              title,
+              status: 1,
+              create_ts: Math.floor(Date.now() / 1000),
+              update_ts: Math.floor(Date.now() / 1000),
+            };
+            mockSessionStore.unshift(newSession);
+            res.end(
+              JSON.stringify({
+                code: 0,
+                message: 'Chat session created successfully',
+                data: {
+                  chat_session_id: chatSessionId,
+                  session_info: newSession,
+                },
+              })
+            );
+          });
+          return;
+        }
+
+        // Mock GET /api/v1/chat/sessions
+        if (url.includes('/api/v1/chat/sessions') && req.method === 'GET') {
+          res.setHeader('Content-Type', 'application/json');
+          res.end(
+            JSON.stringify({
+              code: 0,
+              message: 'Chat sessions retrieved successfully',
+              data: {
+                has_more: false,
+                next_cursor: null,
+                items: mockSessionStore,
+              },
+            })
+          );
+          return;
+        }
 
         // Mock POST /api/v1/chat/message
         if (url.includes('/api/v1/chat/message') && req.method === 'POST') {

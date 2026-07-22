@@ -4,9 +4,32 @@ import type {
   AgentTurnRequest,
   AgentResumeRequest,
   ChatSession,
+  CreateChatSessionResponse,
+  ChatSessionListResponse,
 } from '../types/chat';
 
 export const chatService = {
+  /** Create a new chat session database record (POST /api/v1/chat/sessions) */
+  async createSession(title?: string): Promise<CreateChatSessionResponse> {
+    return request<CreateChatSessionResponse>('/api/v1/chat/sessions', {
+      method: 'POST',
+      body: JSON.stringify({
+        title: title || 'New Chat',
+      }),
+    });
+  },
+
+  /** Query chat sessions metadata list for logged-in user (GET /api/v1/chat/sessions) */
+  async listSessions(limit = 50, cursor?: string): Promise<ChatSessionListResponse> {
+    const params = new URLSearchParams({ limit: String(limit) });
+    if (cursor) {
+      params.append('cursor', cursor);
+    }
+    return request<ChatSessionListResponse>(`/api/v1/chat/sessions?${params.toString()}`, {
+      method: 'GET',
+    });
+  },
+
   /** Post a user message turn */
   async sendTurn(payload: AgentTurnRequest) {
     return request<{ run_id: string; thread_id: string; status: string }>(
