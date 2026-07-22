@@ -156,9 +156,14 @@ class WebUserResumePayload(BaseModel):
         description="Discriminator for user resume response.",
     )
     interrupt_id: str = Field(..., description="Interrupt ID being resolved.")
+    schema_id: WebHumanInputSchemaId = Field(
+        ...,
+        description="Mapped safe human input schema identifier.",
+    )
     action: str | None = Field(default=None, description="Action selected by operator.")
     response_data: Any = Field(default=None, description="Validated human input response data.")
     metadata: dict[str, Any] = Field(default_factory=dict, description="Additional resume metadata.")
+
 
 
 WebUserPayload = Annotated[

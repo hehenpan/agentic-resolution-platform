@@ -1,6 +1,7 @@
 """Anti-Corruption Layer (ACL) projector mapping domain events to Web API payload schemas."""
 
 from typing import Any
+from pydantic import BaseModel
 from shared_common.schemas.ai_agent import (
     AgentDomainEvent,
     AgentOutputProduced,
@@ -14,6 +15,14 @@ from shared_common.schemas.ai_agent import (
     TextPart,
     StructuredDataPart,
     SourcesPart,
+)
+from shared_common.schemas.ai_agent.human_input_schemas import (
+    GetUserByEmailInputModel,
+    GetOrdersByEmailInputModel,
+    GetOrderDetailsByOrderIdInputModel,
+    GetReturnsByOrderIdInputModel,
+    GetReturnsByCustomerIdInputModel,
+    CreateReturnRequestInputModel,
 )
 from app.schemas.chat_msg_payload import (
     WebUserEventKind,
@@ -71,6 +80,7 @@ class ChatEventProjector:
     @staticmethod
     def project_user_resume(
         interrupt_id: str,
+        schema_id: WebHumanInputSchemaId,
         action: str | None = None,
         response_data: Any = None,
         metadata: dict[str, Any] | None = None,
@@ -78,10 +88,57 @@ class ChatEventProjector:
         """Project user resume response parameters into WebUserResumePayload."""
         return WebUserResumePayload(
             interrupt_id=interrupt_id,
+            schema_id=schema_id,
             action=action,
             response_data=response_data,
             metadata=metadata or {},
         )
+
+    @staticmethod
+    def project_web_input_to_domain_input(
+        schema_id: WebHumanInputSchemaId,
+        web_input: BaseModel,
+    ) -> BaseModel:
+        """
+        Anti-Corruption Layer: Project Web DTO input models into downstream ai_agent domain input models.
+        Decouples external Web API contract from internal ai_agent domain models.
+        """
+        if isinstance(web_input, WebGetUserByEmailInputModel):
+            return GetUserByEmailInputModel(
+                email=web_input.email,
+                llm_text=web_input.llm_text,
+            )
+        elif isinstance(web_input, WebGetOrdersByEmailInputModel):
+            return GetOrdersByEmailInputModel(
+                email=web_input.email,
+                llm_text=web_input.llm_text,
+            )
+        elif isinstance(web_input, WebGetOrderDetailsByOrderIdInputModel):
+            return GetOrderDetailsByOrderIdInputModel(
+                order_id=web_input.order_id,
+                llm_text=web_input.llm_text,
+            )
+        elif isinstance(web_input, WebGetReturnsByOrderIdInputModel):
+            return GetReturnsByOrderIdInputModel(
+                order_id=web_input.order_id,
+                llm_text=web_input.llm_text,
+            )
+        elif isinstance(web_input, WebGetReturnsByCustomerIdInputModel):
+            return GetReturnsByCustomerIdInputModel(
+                customer_id=web_input.customer_id,
+                llm_text=web_input.llm_text,
+            )
+        elif isinstance(web_input, WebCreateReturnRequestInputModel):
+            return CreateReturnRequestInputModel(
+                order_id=web_input.order_id,
+                customer_id=web_input.customer_id,
+                reason_code=web_input.reason_code,
+                reason_text=web_input.reason_text,
+                item_condition=web_input.item_condition,
+                created_by=web_input.created_by,
+                llm_text=web_input.llm_text,
+            )
+        return web_input
 
     @staticmethod
     def project_schema_id(domain_schema_id: str) -> WebStructuredDataSchemaId:

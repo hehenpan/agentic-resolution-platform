@@ -283,4 +283,30 @@ class ChatDBWrapper:
             )
             raise e
 
+    def get_latest_interrupt_message(
+        self,
+        chat_session_id: str,
+        thread_id: str,
+    ) -> ChatMessage | None:
+        """
+        Query the latest pending interrupt (HumanInputRequested) message for session and thread.
+        """
+        try:
+            statement = (
+                select(ChatMessage)
+                .where(ChatMessage.chat_session_id == chat_session_id)
+                .where(ChatMessage.thread_id == thread_id)
+                .where(ChatMessage.event_kind == "agent.human_input_requested")
+                .order_by(ChatMessage.create_ts_ms.desc())
+                .limit(1)
+            )
+            return self.db.exec(statement).first()
+        except Exception as e:
+            logger.exception(
+                f"Database error querying latest interrupt message: chat_session_id={chat_session_id}, "
+                f"thread_id={thread_id}, error={e}"
+            )
+            raise e
+
+
 
