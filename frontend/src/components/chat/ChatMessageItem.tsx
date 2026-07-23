@@ -1,12 +1,21 @@
 import React from 'react';
 import { Bot, User, Wrench, CheckCircle2 } from 'lucide-react';
-import type { ChatMessage, ECommerceUserOutput, ECommerceOrdersOutput, ECommerceOrderDetailsOutput } from '../../types/chat';
+import type {
+  ChatMessage,
+  ECommerceUserOutput,
+  ECommerceOrdersOutput,
+  ECommerceOrderDetailsOutput,
+  ECommerceReturnsByOrderOutput,
+  ECommerceCreateReturnOutput,
+} from '../../types/chat';
 import { useAuthStore } from '../../store/authStore';
 import { useChatStore } from '../../store/chatStore';
 import { InterruptTabCard } from './InterruptTabCard';
 import { UserInfoCard } from './UserInfoCard';
 import { OrdersCard } from './OrdersCard';
 import { OrderDetailsCard } from './OrderDetailsCard';
+import { ReturnsByOrderCard } from './ReturnsByOrderCard';
+import { CreateReturnResultCard } from './CreateReturnResultCard';
 
 interface ChatMessageItemProps {
   message: ChatMessage;
@@ -83,6 +92,10 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({ message }) => 
                     return <OrdersCard key={idx} data={part.data as ECommerceOrdersOutput} />;
                   } else if (schemaId === 'ecommerce.order_details_result.v1') {
                     return <OrderDetailsCard key={idx} data={part.data as ECommerceOrderDetailsOutput} />;
+                  } else if (schemaId === 'ecommerce.returns_by_order_result.v1') {
+                    return <ReturnsByOrderCard key={idx} data={part.data as ECommerceReturnsByOrderOutput} />;
+                  } else if (schemaId === 'ecommerce.create_return_result.v1') {
+                    return <CreateReturnResultCard key={idx} data={part.data as ECommerceCreateReturnOutput} />;
                   }
                 }
                 return null;

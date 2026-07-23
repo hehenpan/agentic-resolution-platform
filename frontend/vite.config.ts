@@ -218,6 +218,41 @@ function apiMockPlugin(): Plugin {
                   },
                 },
               },
+              getreturnbyorder: {
+                schema_id: 'human_input.get_returns_by_order.v1',
+                prompt: 'Please enter positive Order ID to look up associated return request history.',
+                input_schema: {
+                  type: 'object',
+                  properties: {
+                    order_id: { type: 'integer', description: 'Positive order identifier' },
+                    llm_text: { type: 'string', description: 'Raw natural language text' },
+                  },
+                },
+              },
+              createreturn: {
+                schema_id: 'human_input.create_return_request.v1',
+                prompt: 'Please enter return details (Order ID, Customer ID, Reason Code, Item Condition) to submit return request.',
+                input_schema: {
+                  $defs: {
+                    AgentReturnReason: {
+                      enum: ['change_of_mind', 'damaged', 'wrong_item', 'not_as_described', 'late_delivery'],
+                      type: 'string',
+                    },
+                    AgentItemCondition: {
+                      enum: ['unopened', 'opened', 'used', 'damaged'],
+                      type: 'string',
+                    },
+                  },
+                  type: 'object',
+                  properties: {
+                    order_id: { type: 'integer', description: 'Positive order identifier' },
+                    customer_id: { type: 'integer', description: 'Positive customer identifier' },
+                    reason_code: { $ref: '#/$defs/AgentReturnReason' },
+                    item_condition: { $ref: '#/$defs/AgentItemCondition' },
+                    reason_text: { type: 'string', description: 'Additional explanation text' },
+                  },
+                },
+              },
             };
 
             const normalizedContent = content.trim().toLowerCase();
@@ -455,6 +490,128 @@ function apiMockPlugin(): Plugin {
                           kind: 'structured_data',
                           schema_id: 'ecommerce.order_details_result.v1',
                           data: orderDetailsData,
+                        },
+                      ],
+                    },
+                  })}\n\n`
+                );
+
+                res.write(
+                  `event: agent.run_completed\ndata: ${JSON.stringify({
+                    event_id: `evt_mock_${now}_rc`,
+                    kind: 'agent.run_completed',
+                  })}\n\n`
+                );
+                res.end();
+              }, 300);
+            } else if (schemaId === 'human_input.get_returns_by_order.v1') {
+              let orderIdVal = Number(resumePayload.order_id || 0);
+              if (!orderIdVal && resumePayload.llm_text) {
+                const match = String(resumePayload.llm_text).match(/\d+/);
+                orderIdVal = match ? parseInt(match[0], 10) : 88412;
+              }
+              if (!orderIdVal) orderIdVal = 88412;
+
+              const textMessage = `Successfully retrieved return details for Order #${orderIdVal}.`;
+              const returnsData = {
+                order_id: orderIdVal,
+                return_request: {
+                  return_request_id: 9001,
+                  order_id: orderIdVal,
+                  customer_id: 1001,
+                  status: 1, // APPROVED
+                  reason_code: 1, // DAMAGED
+                  reason_text: 'Product arrived with damaged outer packaging.',
+                  item_condition: 3, // DAMAGED
+                  requested_at: 1753236000,
+                  created_at: 1753236000,
+                  updated_at: 1753236000,
+                },
+              };
+
+              setTimeout(() => {
+                res.write(
+                  `event: agent.output_produced\ndata: ${JSON.stringify({
+                    event_id: `evt_mock_${now}_out`,
+                    kind: 'agent.output_produced',
+                    output: {
+                      output_id: `out_mock_${now}`,
+                      parts: [
+                        { kind: 'text', text: textMessage },
+                        {
+                          kind: 'structured_data',
+                          schema_id: 'ecommerce.returns_by_order_result.v1',
+                          data: returnsData,
+                        },
+                      ],
+                    },
+                  })}\n\n`
+                );
+
+                res.write(
+                  `event: agent.run_completed\ndata: ${JSON.stringify({
+                    event_id: `evt_mock_${now}_rc`,
+                    kind: 'agent.run_completed',
+                  })}\n\n`
+                );
+                res.end();
+              }, 300);
+            } else if (schemaId === 'human_input.create_return_request.v1') {
+              let orderIdVal = Number(resumePayload.order_id || 0);
+              let customerIdVal = Number(resumePayload.customer_id || 0);
+              const reasonCodeVal = String(resumePayload.reason_code || 'damaged');
+              const itemConditionVal = String(resumePayload.item_condition || 'opened');
+              const reasonTextVal = String(resumePayload.reason_text || 'Item damaged during transit.');
+
+              if (!orderIdVal) orderIdVal = 88412;
+              if (!customerIdVal) customerIdVal = 1001;
+
+              const reasonCodeMap: Record<string, number> = {
+                change_of_mind: 0,
+                damaged: 1,
+                wrong_item: 2,
+                not_as_described: 3,
+                late_delivery: 4,
+              };
+
+              const conditionMap: Record<string, number> = {
+                unopened: 0,
+                opened: 1,
+                used: 2,
+                damaged: 3,
+              };
+
+              const textMessage = `Successfully created return request for Order #${orderIdVal}.`;
+              const createReturnData = {
+                success: true,
+                return_request: {
+                  return_request_id: 9901,
+                  order_id: orderIdVal,
+                  customer_id: customerIdVal,
+                  status: 0, // REQUESTED
+                  reason_code: reasonCodeMap[reasonCodeVal] ?? 1,
+                  reason_text: reasonTextVal,
+                  item_condition: conditionMap[itemConditionVal] ?? 1,
+                  requested_at: 1753236000,
+                  created_at: 1753236000,
+                  updated_at: 1753236000,
+                },
+                error_message: null,
+              };
+
+              setTimeout(() => {
+                res.write(
+                  `event: agent.output_produced\ndata: ${JSON.stringify({
+                    event_id: `evt_mock_${now}_out`,
+                    kind: 'agent.output_produced',
+                    output: {
+                      output_id: `out_mock_${now}`,
+                      parts: [
+                        { kind: 'text', text: textMessage },
+                        {
+                          kind: 'structured_data',
+                          schema_id: 'ecommerce.create_return_result.v1',
+                          data: createReturnData,
                         },
                       ],
                     },

@@ -223,8 +223,48 @@ export interface ECommerceOrderDetailsOutput {
   items: ECommerceOrderItemOutput[];
 }
 
+export interface ECommerceReturnRequestOutput {
+  return_request_id: number;
+  order_id: number;
+  customer_id: number;
+  status: number; // 0: REQUESTED, 1: APPROVED, 2: REJECTED, 3: RECEIVED, 4: REFUNDED, 5: CANCELLED
+  reason_code: number; // 0: CHANGE_OF_MIND, 1: DAMAGED, 2: WRONG_ITEM, 3: NOT_AS_DESCRIBED, 4: LATE_DELIVERY
+  reason_text: string;
+  item_condition: number; // 0: UNOPENED, 1: OPENED, 2: USED, 3: DAMAGED
+  requested_at: number;
+  approved_at?: number | null;
+  rejected_at?: number | null;
+  received_at?: number | null;
+  closed_at?: number | null;
+  resolution_type?: number | null;
+  created_by?: number | null;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface ECommerceReturnsByOrderOutput {
+  order_id: number;
+  return_request?: ECommerceReturnRequestOutput | null;
+}
+
+export interface ECommerceCreateReturnOutput {
+  success: boolean;
+  return_request?: ECommerceReturnRequestOutput | null;
+  error_message?: string | null;
+}
+
 export interface WebGetOrderDetailsByOrderIdInputModel {
   order_id?: number | null;
+  llm_text?: string | null;
+}
+
+export interface WebCreateReturnRequestInputModel {
+  order_id?: number | null;
+  customer_id?: number | null;
+  reason_code?: string | null;
+  reason_text?: string | null;
+  item_condition?: string | null;
+  created_by?: number | null;
   llm_text?: string | null;
 }
 
@@ -236,7 +276,13 @@ export interface WebTextPart {
 export interface WebStructuredDataPart {
   kind: 'structured_data';
   schema_id: WebStructuredDataSchemaId | string;
-  data: ECommerceUserOutput | ECommerceOrdersOutput | ECommerceOrderDetailsOutput | Record<string, unknown>;
+  data:
+    | ECommerceUserOutput
+    | ECommerceOrdersOutput
+    | ECommerceOrderDetailsOutput
+    | ECommerceReturnsByOrderOutput
+    | ECommerceCreateReturnOutput
+    | Record<string, unknown>;
 }
 
 export type WebAgentOutputPart = WebTextPart | WebStructuredDataPart;
