@@ -47,6 +47,7 @@ export const InterruptTabCard: React.FC<InterruptTabCardProps> = ({
   const isGetOrders = schemaId.includes('get_orders');
   const isGetOrderDetails = schemaId.includes('get_order_details');
   const isGetReturnsByOrder = schemaId.includes('get_returns_by_order');
+  const isGetReturnsByCustomer = schemaId.includes('get_returns_by_customer');
   const isCreateReturn = schemaId.includes('create_return_request');
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -67,6 +68,10 @@ export const InterruptTabCard: React.FC<InterruptTabCardProps> = ({
         reason_text: reasonText.trim() || undefined,
       };
       displayContent = `[Submitted Form] Order ID: ${orderId.trim()}, Customer ID: ${customerId.trim()}, Reason: ${reasonCode}, Condition: ${itemCondition}`;
+    } else if (isGetReturnsByCustomer) {
+      const customerIdNum = parseInt(inputValue.trim(), 10);
+      payload = { customer_id: isNaN(customerIdNum) ? inputValue.trim() : customerIdNum };
+      displayContent = `[Submitted Form] Customer ID: ${inputValue.trim()}`;
     } else if (isGetOrderDetails || isGetReturnsByOrder) {
       const orderIdNum = parseInt(inputValue.trim(), 10);
       payload = { order_id: isNaN(orderIdNum) ? inputValue.trim() : orderIdNum };
@@ -84,6 +89,7 @@ export const InterruptTabCard: React.FC<InterruptTabCardProps> = ({
     if (isGetOrders) return 'Action Required: Customer Orders Interrupt';
     if (isGetOrderDetails) return 'Action Required: Order Details Interrupt';
     if (isGetReturnsByOrder) return 'Action Required: Returns by Order Interrupt';
+    if (isGetReturnsByCustomer) return 'Action Required: Returns by Customer Interrupt';
     if (isCreateReturn) return 'Action Required: Create Return Request Interrupt';
     return 'Action Required: Human Input Interrupt';
   };
@@ -220,17 +226,25 @@ export const InterruptTabCard: React.FC<InterruptTabCardProps> = ({
           ) : (
             <div className="flex flex-col space-y-1.5">
               <label htmlFor="interrupt-input-field" className="text-xs font-medium text-amber-300/90">
-                {isGetOrderDetails || isGetReturnsByOrder ? 'Order ID' : 'Customer Email Address'}{' '}
+                {isGetReturnsByCustomer
+                  ? 'Customer ID'
+                  : isGetOrderDetails || isGetReturnsByOrder
+                  ? 'Order ID'
+                  : 'Customer Email Address'}{' '}
                 <span className="text-rose-400">*</span>
               </label>
               <input
                 id="interrupt-input-field"
-                type={isGetOrderDetails || isGetReturnsByOrder ? 'number' : 'email'}
+                type={isGetReturnsByCustomer || isGetOrderDetails || isGetReturnsByOrder ? 'number' : 'email'}
                 required
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
                 placeholder={
-                  isGetOrderDetails || isGetReturnsByOrder ? 'e.g. 88412' : 'e.g. customer@example.com'
+                  isGetReturnsByCustomer
+                    ? 'e.g. 1001'
+                    : isGetOrderDetails || isGetReturnsByOrder
+                    ? 'e.g. 88412'
+                    : 'e.g. customer@example.com'
                 }
                 disabled={disabled}
                 className="w-full px-3.5 py-2.5 text-xs bg-slate-900 border border-amber-500/40 rounded-xl text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500/50 transition-all font-medium shadow-inner"

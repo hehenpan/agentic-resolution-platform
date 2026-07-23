@@ -6,6 +6,7 @@ import { UserInfoCard } from './UserInfoCard';
 import { OrdersCard } from './OrdersCard';
 import { OrderDetailsCard } from './OrderDetailsCard';
 import { ReturnsByOrderCard } from './ReturnsByOrderCard';
+import { ReturnsByCustomerCard } from './ReturnsByCustomerCard';
 import { CreateReturnResultCard } from './CreateReturnResultCard';
 import type { WebHumanInputRequestedData } from '../../types/chat';
 
@@ -235,5 +236,77 @@ describe('Interrupt and Card Components', () => {
     expect(screen.getByText('#RET-9901')).toBeInTheDocument();
     expect(screen.getByText('#88412')).toBeInTheDocument();
     expect(screen.getByText('Damaged Product')).toBeInTheDocument();
+  });
+
+  it('renders ReturnsByCustomerCard with return list', () => {
+    const customerReturnsData = {
+      customer_id: 1001,
+      returns: [
+        {
+          return_request_id: 9901,
+          order_id: 88412,
+          customer_id: 1001,
+          status: 0,
+          reason_code: 1,
+          reason_text: 'Item arrived broken',
+          item_condition: 1,
+          requested_at: 1753236000,
+          created_at: 1753236000,
+          updated_at: 1753236000,
+        },
+      ],
+    };
+
+    render(<ReturnsByCustomerCard data={customerReturnsData} />);
+
+    expect(screen.getByText(/Customer Return History \(1\)/i)).toBeInTheDocument();
+    expect(screen.getByText('Customer #1001')).toBeInTheDocument();
+    expect(screen.getByText('#RET-9901')).toBeInTheDocument();
+    expect(screen.getByText('REQUESTED')).toBeInTheDocument();
+    expect(screen.getByText('Damaged Product')).toBeInTheDocument();
+  });
+
+  it('renders ReturnsByCustomerCard empty state when returns list is empty', () => {
+    const emptyCustomerReturnsData = {
+      customer_id: 9999,
+      returns: [],
+    };
+
+    render(<ReturnsByCustomerCard data={emptyCustomerReturnsData} />);
+
+    expect(screen.getByText('No Return History Found')).toBeInTheDocument();
+    expect(screen.getByText('#9999')).toBeInTheDocument();
+    expect(screen.getByText(/has no associated return requests in the system/i)).toBeInTheDocument();
+  });
+
+  it('renders InterruptTabCard for get_returns_by_customer and submits customer_id', () => {
+    const onSubmit = vi.fn();
+    const requestData: WebHumanInputRequestedData = {
+      event_id: 'evt_cust_ret_1',
+      kind: 'agent.human_input_requested',
+      thread_id: 'thread_1',
+      run_id: 'run_1',
+      interrupt_id: 'intr_cust_ret_1',
+      request: {
+        prompt: 'Please enter positive Customer ID to look up customer return history.',
+        schema_id: 'human_input.get_returns_by_customer.v1',
+      },
+    };
+
+    render(<InterruptTabCard requestData={requestData} onSubmit={onSubmit} />);
+
+    expect(screen.getByText('Action Required: Returns by Customer Interrupt')).toBeInTheDocument();
+    expect(screen.getByText('Customer ID')).toBeInTheDocument();
+
+    const input = screen.getByRole('spinbutton') as HTMLInputElement;
+    fireEvent.change(input, { target: { value: '1001' } });
+
+    const submitBtn = screen.getByRole('button', { name: /Commit Input/i });
+    fireEvent.click(submitBtn);
+
+    expect(onSubmit).toHaveBeenCalledWith(
+      { customer_id: 1001 },
+      '[Submitted Form] Customer ID: 1001'
+    );
   });
 });
