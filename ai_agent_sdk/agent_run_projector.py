@@ -67,17 +67,24 @@ class AgentRunProjector:
 
     def process(
         self,
-        raw_event: Mapping[str, object],
+        raw_event: object,
         source_sequence: int | None = None,
     ) -> list[AgentDomainEvent]:
         """Project one raw SDK v2 stream event into zero or more events."""
-        if not self._run_id and isinstance(raw_event, Mapping):
-            event_run_id = raw_event.get("run_id")
-            if isinstance(event_run_id, str) and event_run_id:
-                self._run_id = event_run_id
+        if hasattr(raw_event, "event") and hasattr(raw_event, "data"):
+            event_type = getattr(raw_event, "event")
+            data = getattr(raw_event, "data")
+        elif isinstance(raw_event, Mapping):
+            event_type = raw_event.get("type") or raw_event.get("event")
+            data = raw_event.get("data")
+        else:
+            return []
 
-        event_type = raw_event.get("type")
-        data = raw_event.get("data")
+        if not self._run_id:
+            if isinstance(data, Mapping) and "run_id" in data:
+                event_run_id = data.get("run_id")
+                if isinstance(event_run_id, str) and event_run_id:
+                    self._run_id = event_run_id
 
         if event_type == "checkpoints":
             self._update_resume_cursor_from_checkpoint_payload(data)
@@ -132,7 +139,7 @@ class AgentRunProjector:
 
     def fail(self, error: Exception) -> list[AgentDomainEvent]:
         """Convert a transport failure into one safe terminal failure event."""
-        logger.error(f"Agent run stream failed: error={type(error).__name__}")
+        logger.exception(f"Agent run stream failed: {error}")
         if self._terminal_event is not None:
             return []
 
@@ -377,7 +384,8 @@ class AgentRunProjector:
             else "no-checkpoint"
         )
         output_ids = ",".join(str(output_id) for output_id in sorted(self._outputs))
-        return f"{terminal}:{checkpoint_id}:{output_ids}"
+        run_id = self._get_run_id() or "no-run-id"
+        return f"{terminal}:{run_id}:{checkpoint_id}:{output_ids}"
 
     def _take_sequence(self) -> int:
         sequence = self._next_sequence

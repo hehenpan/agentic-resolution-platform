@@ -46,6 +46,17 @@ class Settings(object):
         self.SERVER_PORT = self._config.getint("server", "port", fallback=8000)
         self.SERVER_DEBUG = self._config.getboolean("server", "debug", fallback=False)
         self.SERVER_WORKERS = self._config.getint("server", "workers", fallback=1)
+        self.SERVER_RELOAD = self._config.getboolean(
+            "server",
+            "reload",
+            fallback=app_env == "dev",
+        )
+        reload_dirs = self._config.get("server", "reload_dirs", fallback="")
+        self.SERVER_RELOAD_DIRS = [
+            path.strip()
+            for path in reload_dirs.split(",")
+            if path.strip()
+        ]
 
 
         # Database configurations

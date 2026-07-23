@@ -1,4 +1,5 @@
 import json
+import uuid
 from fastapi import status
 from sqlmodel import Session, select
 from app.models.models import (
@@ -12,6 +13,7 @@ from app.models.models import (
 from app.schemas.chat import ChatSessionStatus
 from app.schemas.common import BizCode
 from app.api.deps import get_ai_agent_client
+from app.models.chat_wrapper import ChatDBWrapper
 from microservice_client.ai_agent_client import AIAgentServerInterface
 from shared_common.schemas.ai_agent import (
     AgentCreateRunResponse,
@@ -313,6 +315,8 @@ class DummyMockAIAgentClient(AIAgentServerInterface):
     def __init__(self, run_id: str, events: list):
         self.mock_run_id = run_id
         self.mock_events = events
+        self.create_run_request = None
+        self.join_stream_request = None
 
     def start(self):
         pass
@@ -321,6 +325,7 @@ class DummyMockAIAgentClient(AIAgentServerInterface):
         pass
 
     async def create_run(self, request):
+        self.create_run_request = request
         return AgentCreateRunResponse(
             run_id=self.mock_run_id,
             thread_id=request.thread_id,
@@ -337,13 +342,14 @@ class DummyMockAIAgentClient(AIAgentServerInterface):
     def stream_turn(self, request):
         return self._event_generator()
 
+    def join_stream(self, request):
+        self.join_stream_request = request
+        return self._event_generator()
+
     def resume_turn(self, request):
         pass
 
     def stream_rag_file_import(self, request):
-        pass
-
-    def join_stream(self, request):
         pass
 
     def get_state_events(self, request):
@@ -412,6 +418,12 @@ def test_send_chat_message_sse_success(client, db_session: Session):
 
         assert response.status_code == status.HTTP_200_OK
         assert "text/event-stream" in response.headers["content-type"]
+        assert mock_agent_client.create_run_request.message.content == payload["content"]
+        assert (
+            mock_agent_client.join_stream_request.thread_id
+            == mock_agent_client.create_run_request.thread_id
+        )
+        assert mock_agent_client.join_stream_request.run_id == run_id
 
         # Parse SSE wire format
         response_text = response.text
@@ -479,6 +491,71 @@ def test_send_chat_message_sse_success(client, db_session: Session):
         client.app.dependency_overrides.pop(get_ai_agent_client, None)
 
 
+def test_send_chat_message_does_not_stream_when_turn_persistence_fails(
+    client,
+    db_session: Session,
+    monkeypatch,
+):
+    """Run and user message records must both persist before streaming starts."""
+    login_user_client(client)
+    from utils.commons import generate_uuid_hex, get_current_ts
+
+    user = db_session.exec(select(User).where(User.email == TEST_USER_EMAIL)).first()
+    session_id = f"cs_{generate_uuid_hex()}"
+    db_session.add(
+        ChatSession(
+            chat_session_id=session_id,
+            tenant_id=user.tenant_id,
+            user_id=user.user_id,
+            title="Turn persistence failure",
+            status=ModelChatSessionStatus.ACTIVE,
+            create_ts=get_current_ts(),
+            update_ts=get_current_ts(),
+        )
+    )
+    db_session.commit()
+
+    run_id = f"run_{generate_uuid_hex()}"
+    mock_agent_client = DummyMockAIAgentClient(run_id=run_id, events=[])
+    client.app.dependency_overrides[get_ai_agent_client] = lambda: mock_agent_client
+
+    def fail_turn_persistence(
+        self: ChatDBWrapper,
+        run_id: str,
+        thread_id: str,
+        chat_session_id: str,
+        user_message: ChatMessage,
+    ) -> None:
+        raise RuntimeError("database unavailable")
+
+    monkeypatch.setattr(ChatDBWrapper, "save_turn_start", fail_turn_persistence)
+
+    try:
+        response = client.post(
+            f"https://testserver/api/v1/chat/sessions/{session_id}/messages",
+            json={"content": "Do not lose this message"},
+        )
+
+        assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+        assert "Failed to persist initialized agent run" in response.json()["detail"]
+        assert mock_agent_client.create_run_request is not None
+        assert mock_agent_client.join_stream_request is None
+        assert (
+            db_session.exec(
+                select(ThreadRun).where(ThreadRun.chat_session_id == session_id)
+            ).first()
+            is None
+        )
+        assert (
+            db_session.exec(
+                select(ChatMessage).where(ChatMessage.chat_session_id == session_id)
+            ).first()
+            is None
+        )
+    finally:
+        client.app.dependency_overrides.pop(get_ai_agent_client, None)
+
+
 def test_send_chat_message_thread_reuse(client, db_session: Session):
     """
     Test that send_chat_message reuses existing latest ChatThread record
@@ -501,8 +578,8 @@ def test_send_chat_message_thread_reuse(client, db_session: Session):
     db_session.add(cs)
 
     # Insert older and newer threads
-    old_thread_id = f"thread_old_{generate_uuid_hex()}"
-    new_thread_id = f"thread_new_{generate_uuid_hex()}"
+    old_thread_id = str(uuid.uuid4())
+    new_thread_id = str(uuid.uuid4())
     t_old = ChatThread(
         thread_id=old_thread_id,
         chat_session_id=session_id,
@@ -697,10 +774,6 @@ def test_project_human_input_schema_id_known_and_unknown():
     assert web_event.request.prompt == "Please provide user email"
     assert "properties" in web_event.request.input_schema
     assert "email" in web_event.request.input_schema["properties"]
-
-
-
-
 
 
 

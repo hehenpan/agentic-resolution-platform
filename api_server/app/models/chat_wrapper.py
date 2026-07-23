@@ -265,9 +265,51 @@ class ChatDBWrapper:
             )
             raise e
 
+    def save_turn_start(
+        self,
+        run_id: str,
+        thread_id: str,
+        chat_session_id: str,
+        user_message: ChatMessage,
+    ) -> tuple[ThreadRun, ChatMessage]:
+        """Atomically persist a new run mapping and its initiating user message."""
+        thread_run = ThreadRun(
+            run_id=run_id,
+            thread_id=thread_id,
+            chat_session_id=chat_session_id,
+            create_ts=get_current_ts(),
+        )
+        try:
+            self.db.add(thread_run)
+            self.db.add(user_message)
+            self.db.commit()
+            self.db.refresh(thread_run)
+            self.db.refresh(user_message)
+            logger.info(
+                f"Successfully persisted turn start: run_id={run_id}, "
+                f"thread_id={thread_id}, event_id={user_message.event_id}"
+            )
+            return thread_run, user_message
+        except Exception as e:
+            self.db.rollback()
+            logger.exception(
+                f"Database error while persisting turn start: run_id={run_id}, "
+                f"thread_id={thread_id}, event_id={user_message.event_id}, error={e}"
+            )
+            raise
+
     def save_chat_message(self, message: ChatMessage) -> ChatMessage:
         """Insert a ChatMessage record into database."""
         try:
+            existing = self.db.exec(
+                select(ChatMessage).where(ChatMessage.event_id == message.event_id)
+            ).first()
+            if existing:
+                logger.info(
+                    f"ChatMessage with event_id={message.event_id} already exists, returning existing."
+                )
+                return existing
+
             self.db.add(message)
             self.db.commit()
             self.db.refresh(message)
@@ -307,6 +349,5 @@ class ChatDBWrapper:
                 f"thread_id={thread_id}, error={e}"
             )
             raise e
-
 
 

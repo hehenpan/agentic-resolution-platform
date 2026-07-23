@@ -6,7 +6,7 @@ from loguru import logger
 
 # Get base directory (ai_agent/src/agent/core/ -> ai_agent)
 BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent
-LOG_DIR = BASE_DIR / "logs"
+LOG_DIR = Path(os.getenv("AI_AGENT_LOG_DIR", str(BASE_DIR / "logs")))
 LOG_FILE_PATH = LOG_DIR / "ai_agent.log"
 
 CONSOLE_FORMAT = (

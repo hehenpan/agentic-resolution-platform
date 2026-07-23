@@ -97,6 +97,16 @@ class AgentRunStream:
             )
             input_payload = _AgentSupervisorInput(messages=[message])
 
+        try:
+            await self._client.threads.create(
+                thread_id=request.thread_id,
+                if_exists="do_nothing",
+            )
+        except Exception as err:
+            logger.warning(
+                f"Thread registration note for thread_id={request.thread_id}: {err}"
+            )
+
         run = await self._client.runs.create(
             thread_id=request.thread_id,
             assistant_id=request.assistant_id,
@@ -288,7 +298,7 @@ class AgentRunStream:
 
             raw_stream = self._client.runs.stream(
                 thread_id=thread_id,
-                assistant_id=assistant_id.value,
+                assistant_id=assistant_id.value if hasattr(assistant_id, "value") else str(assistant_id),
                 input=input_payload,
                 command=command,
                 checkpoint=checkpoint,

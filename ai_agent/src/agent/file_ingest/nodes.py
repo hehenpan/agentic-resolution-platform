@@ -102,7 +102,7 @@ async def store_in_vector_db(state: FileIngestState) -> dict[str, Any]:
         points.append(point)
 
     db = get_vector_db()
-    db.upsert(
+    await db.upsert(
         collection_name=QDRANT_COLLECTION_RAG,
         points=points,
     )

@@ -12,7 +12,7 @@ from shared_common.schemas.ai_agent import (
 
 from agent.core.constants import GEMINI_EMBEDDING_DIM, QDRANT_COLLECTION_RAG
 from agent.core.logger import logger
-from agent.core.qdrant import get_qdrant_client
+from agent.core.qdrant import get_async_qdrant_client
 from agent.file_ingest import file_ingest_graph
 from agent.file_ingest import nodes as file_ingest_nodes
 
@@ -95,10 +95,10 @@ async def test_file_ingest_success(monkeypatch: pytest.MonkeyPatch) -> None:
     # Assert multiple chunks were generated
     assert len(embedding_model.inputs) > 1
 
-    client = get_qdrant_client()
+    client = await get_async_qdrant_client()
     collection_name = QDRANT_COLLECTION_RAG
 
-    assert client.collection_exists(collection_name)
+    assert await client.collection_exists(collection_name)
 
     from uuid import UUID, uuid5
     INGEST_NAMESPACE = UUID("507db244-9336-55f5-a55f-146301c9b928")
@@ -108,7 +108,7 @@ async def test_file_ingest_success(monkeypatch: pytest.MonkeyPatch) -> None:
         for i in range(len(embedding_model.inputs))
     ]
 
-    points = client.retrieve(collection_name=collection_name, ids=expected_ids)
+    points = await client.retrieve(collection_name=collection_name, ids=expected_ids)
     assert len(points) == len(expected_ids)
 
     for idx, point in enumerate(points):

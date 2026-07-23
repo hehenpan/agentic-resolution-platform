@@ -8,7 +8,8 @@ from pydantic import BaseModel, Field
 from qdrant_client.models import Distance, PointStruct, VectorParams
 
 from agent.core.constants import GEMINI_EMBEDDING_DIM
-from agent.core.qdrant import get_qdrant_client
+from agent.core.logger import logger
+from agent.core.qdrant import get_async_qdrant_client
 
 
 class RAGFileVectorPayload(BaseModel):
@@ -54,11 +55,11 @@ class VectorDB(ABC):
     """Define the vector database operations used by the agent service."""
 
     @abstractmethod
-    def upsert(self, collection_name: str, points: list[VectorPoint]) -> None:
+    async def upsert(self, collection_name: str, points: list[VectorPoint]) -> None:
         """Insert or update points in a collection."""
 
     @abstractmethod
-    def search(
+    async def search(
         self,
         collection_name: str,
         query_vector: list[float],
@@ -70,12 +71,12 @@ class VectorDB(ABC):
 class QdrantVectorDB(VectorDB):
     """Implement vector storage and retrieval with Qdrant."""
 
-    def upsert(self, collection_name: str, points: list[VectorPoint]) -> None:
+    async def upsert(self, collection_name: str, points: list[VectorPoint]) -> None:
         """Insert or update points, creating the collection when required."""
-        client = get_qdrant_client()
+        client = await get_async_qdrant_client()
 
-        if not client.collection_exists(collection_name):
-            client.create_collection(
+        if not await client.collection_exists(collection_name):
+            await client.create_collection(
                 collection_name=collection_name,
                 vectors_config=VectorParams(
                     size=GEMINI_EMBEDDING_DIM,
@@ -96,31 +97,46 @@ class QdrantVectorDB(VectorDB):
             for point in points
         ]
 
-        client.upsert(
+        await client.upsert(
             collection_name=collection_name,
             points=qdrant_points,
         )
 
-    def search(
+    async def search(
         self,
         collection_name: str,
         query_vector: list[float],
         limit: int,
     ) -> list[VectorSearchResult]:
         """Search a Qdrant collection for the closest points."""
-        response = get_qdrant_client().query_points(
-            collection_name=collection_name,
-            query=query_vector,
-            limit=limit,
-        )
-        return [
-            VectorSearchResult(
-                id=point.id,
-                score=point.score,
-                payload=point.payload or {},
+        try:
+            client = await get_async_qdrant_client()
+            if not await client.collection_exists(collection_name):
+                logger.warning(
+                    "Collection {} does not exist in Qdrant; returning empty search results.",
+                    collection_name,
+                )
+                return []
+            response = await client.query_points(
+                collection_name=collection_name,
+                query=query_vector,
+                limit=limit,
             )
-            for point in response.points
-        ]
+            return [
+                VectorSearchResult(
+                    id=point.id,
+                    score=point.score,
+                    payload=point.payload or {},
+                )
+                for point in response.points
+            ]
+        except Exception as error:
+            logger.warning(
+                "Failed to search Qdrant collection {}: {}",
+                collection_name,
+                error,
+            )
+            return []
 
 
 def get_vector_db() -> VectorDB:

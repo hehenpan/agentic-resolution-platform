@@ -140,7 +140,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
         set((state) => ({
           sessionMessages: {
             ...state.sessionMessages,
-            [chatSessionId]: mappedMessages,
+            [chatSessionId]: mappedMessages.reverse(),
           },
         }));
       }
@@ -224,11 +224,13 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
             }
           } else if (event === 'error') {
             const detailStr = (data.detail as string) || 'Stream encountered error';
+            get().setMessageStatus(chatSessionId, userMsgId, 'error');
             get().setMessageStatus(chatSessionId, agentMsgId, 'error');
             set({ error: detailStr });
           }
         },
         (err) => {
+          get().setMessageStatus(chatSessionId, userMsgId, 'error');
           get().setMessageStatus(chatSessionId, agentMsgId, 'error');
           set({ error: err.message, isStreaming: false });
         },
@@ -238,6 +240,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       );
     } catch (err: unknown) {
       const errorMsg = err instanceof Error ? err.message : 'Failed to send chat message';
+      get().setMessageStatus(chatSessionId, userMsgId, 'error');
       get().setMessageStatus(chatSessionId, agentMsgId, 'error');
       set({ error: errorMsg, isStreaming: false });
     }

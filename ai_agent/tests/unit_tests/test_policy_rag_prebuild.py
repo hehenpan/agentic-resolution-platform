@@ -1,5 +1,5 @@
 import pytest
-from agent.core.qdrant import get_qdrant_client
+from agent.core.qdrant import get_async_qdrant_client
 from agent.core.embedding import get_embedding_model
 from agent.core.constants import QDRANT_COLLECTION_RAG
 
@@ -27,11 +27,11 @@ async def test_policy_retrieval_offline(prebuilt_qdrant_env, query_text: str) ->
     for both query representations.
     """
     # 1. Retrieve the pre-configured qdrant client pointing to prebuilt path
-    client = get_qdrant_client()
+    client = await get_async_qdrant_client()
     
     # 2. Verify the collection exists
     collection_name = QDRANT_COLLECTION_RAG
-    assert client.collection_exists(collection_name)
+    assert await client.collection_exists(collection_name)
     
     # 3. Retrieve the embedding model (which is mocked session-wide to load query cache)
     embedding_model = get_embedding_model()
@@ -40,7 +40,7 @@ async def test_policy_retrieval_offline(prebuilt_qdrant_env, query_text: str) ->
     query_vector = await embedding_model.aembed_query(query_text)
     
     # 4. Search in local Qdrant collection
-    results = client.query_points(
+    results = await client.query_points(
         collection_name=collection_name,
         query=query_vector,
         limit=1

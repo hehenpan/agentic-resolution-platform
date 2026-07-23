@@ -1,5 +1,6 @@
 """Nodes for policy retrieval and response generation."""
 
+import asyncio
 from enum import Enum
 from typing import Any
 
@@ -68,7 +69,7 @@ async def retrieve_policy(
             ),
         )
         query_vector = await embedding.get_embedding_model().aembed_query(question)
-        results = vectordb.get_vector_db().search(
+        results = await vectordb.get_vector_db().search(
             collection_name=QDRANT_COLLECTION_RAG,
             query_vector=query_vector,
             limit=POLICY_RETRIEVAL_LIMIT,
@@ -95,11 +96,11 @@ async def retrieve_policy(
             ),
         )
     except Exception as error:
-        logger.error(
+        logger.warning(
             "Failed to retrieve policy chunks from the RAG store: {}",
-            type(error).__name__,
+            error,
         )
-        raise
+        chunks = []
 
     update = RetrievePolicyUpdate(
         query=question,

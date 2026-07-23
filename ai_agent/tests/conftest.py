@@ -54,7 +54,7 @@ def prebuilt_qdrant_env():
     Fixture that temporarily configures the Qdrant client to use the pre-built local database
     instead of the default in-memory database, clearing client cache as needed.
     """
-    from agent.core.qdrant import get_qdrant_client
+    from agent.core.qdrant import clear_qdrant_client_cache
     from pathlib import Path
     
     db_path = str(Path(__file__).resolve().parent / "test_data" / "qdrant_prebuilt_db")
@@ -65,14 +65,14 @@ def prebuilt_qdrant_env():
     settings.QDRANT_LOCATION = None
     settings.QDRANT_PATH = db_path
     
-    # Clear get_qdrant_client cache to force reload with the new path
-    get_qdrant_client.cache_clear()
+    # Clear Qdrant client cache to force reload with the new path.
+    clear_qdrant_client_cache()
     
     yield
     
     settings.QDRANT_LOCATION = orig_location
     settings.QDRANT_PATH = orig_path
-    get_qdrant_client.cache_clear()
+    clear_qdrant_client_cache()
 
 @pytest.fixture(scope="session")
 def anyio_backend():

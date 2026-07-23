@@ -234,7 +234,6 @@ async def send_chat_message(
         chat_session_id=chat_session_id,
         thread_id=prep_result.thread_id,
         run_id=prep_result.run_id,
-        message_content=request.content,
         ai_agent_client=ai_agent_client,
     )
     return StreamingResponse(
@@ -319,7 +318,6 @@ async def resume_chat_message(
             "X-Accel-Buffering": "no",
         },
     )
-
 
 
 
