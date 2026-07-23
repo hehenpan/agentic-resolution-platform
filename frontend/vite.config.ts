@@ -7,6 +7,7 @@ import path from 'path'
 function apiMockPlugin(): Plugin {
   const mockSessionStore: unknown[] = [];
   const mockMessageStore: Record<string, unknown[]> = {};
+  const mockReturnsStore: Record<number, any[]> = {};
 
   return {
     name: 'vite-plugin-api-mock',
@@ -250,6 +251,17 @@ function apiMockPlugin(): Plugin {
                     reason_code: { $ref: '#/$defs/AgentReturnReason' },
                     item_condition: { $ref: '#/$defs/AgentItemCondition' },
                     reason_text: { type: 'string', description: 'Additional explanation text' },
+                  },
+                },
+              },
+              getreturnbycustomer: {
+                schema_id: 'human_input.get_returns_by_customer.v1',
+                prompt: 'Please enter positive Customer ID to look up customer return history.',
+                input_schema: {
+                  type: 'object',
+                  properties: {
+                    customer_id: { type: 'integer', description: 'Positive customer identifier' },
+                    llm_text: { type: 'string', description: 'Raw natural language text' },
                   },
                 },
               },
@@ -582,20 +594,27 @@ function apiMockPlugin(): Plugin {
               };
 
               const textMessage = `Successfully created return request for Order #${orderIdVal}.`;
+              const returnReqObj = {
+                return_request_id: 9901,
+                order_id: orderIdVal,
+                customer_id: customerIdVal,
+                status: 0, // REQUESTED
+                reason_code: reasonCodeMap[reasonCodeVal] ?? 1,
+                reason_text: reasonTextVal,
+                item_condition: conditionMap[itemConditionVal] ?? 1,
+                requested_at: 1753236000,
+                created_at: 1753236000,
+                updated_at: 1753236000,
+              };
+
+              if (!mockReturnsStore[customerIdVal]) {
+                mockReturnsStore[customerIdVal] = [];
+              }
+              mockReturnsStore[customerIdVal].push(returnReqObj);
+
               const createReturnData = {
                 success: true,
-                return_request: {
-                  return_request_id: 9901,
-                  order_id: orderIdVal,
-                  customer_id: customerIdVal,
-                  status: 0, // REQUESTED
-                  reason_code: reasonCodeMap[reasonCodeVal] ?? 1,
-                  reason_text: reasonTextVal,
-                  item_condition: conditionMap[itemConditionVal] ?? 1,
-                  requested_at: 1753236000,
-                  created_at: 1753236000,
-                  updated_at: 1753236000,
-                },
+                return_request: returnReqObj,
                 error_message: null,
               };
 
@@ -612,6 +631,52 @@ function apiMockPlugin(): Plugin {
                           kind: 'structured_data',
                           schema_id: 'ecommerce.create_return_result.v1',
                           data: createReturnData,
+                        },
+                      ],
+                    },
+                  })}\n\n`
+                );
+
+                res.write(
+                  `event: agent.run_completed\ndata: ${JSON.stringify({
+                    event_id: `evt_mock_${now}_rc`,
+                    kind: 'agent.run_completed',
+                  })}\n\n`
+                );
+                res.end();
+              }, 300);
+            } else if (schemaId === 'human_input.get_returns_by_customer.v1') {
+              let customerIdVal = Number(resumePayload.customer_id || 0);
+              if (!customerIdVal && resumePayload.llm_text) {
+                const match = String(resumePayload.llm_text).match(/\d+/);
+                customerIdVal = match ? parseInt(match[0], 10) : 1001;
+              }
+              if (!customerIdVal) customerIdVal = 1001;
+
+              const customerReturns = mockReturnsStore[customerIdVal] || [];
+              const textMessage =
+                customerReturns.length > 0
+                  ? `Successfully retrieved ${customerReturns.length} return request(s) for Customer #${customerIdVal}.`
+                  : `No return request history found for Customer #${customerIdVal}.`;
+
+              const returnsData = {
+                customer_id: customerIdVal,
+                returns: customerReturns,
+              };
+
+              setTimeout(() => {
+                res.write(
+                  `event: agent.output_produced\ndata: ${JSON.stringify({
+                    event_id: `evt_mock_${now}_out`,
+                    kind: 'agent.output_produced',
+                    output: {
+                      output_id: `out_mock_${now}`,
+                      parts: [
+                        { kind: 'text', text: textMessage },
+                        {
+                          kind: 'structured_data',
+                          schema_id: 'ecommerce.returns_by_customer_result.v1',
+                          data: returnsData,
                         },
                       ],
                     },

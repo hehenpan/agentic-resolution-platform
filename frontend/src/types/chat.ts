@@ -247,6 +247,11 @@ export interface ECommerceReturnsByOrderOutput {
   return_request?: ECommerceReturnRequestOutput | null;
 }
 
+export interface ECommerceReturnsByCustomerOutput {
+  customer_id: number;
+  returns: ECommerceReturnRequestOutput[];
+}
+
 export interface ECommerceCreateReturnOutput {
   success: boolean;
   return_request?: ECommerceReturnRequestOutput | null;
@@ -255,6 +260,11 @@ export interface ECommerceCreateReturnOutput {
 
 export interface WebGetOrderDetailsByOrderIdInputModel {
   order_id?: number | null;
+  llm_text?: string | null;
+}
+
+export interface WebGetReturnsByCustomerIdInputModel {
+  customer_id?: number | null;
   llm_text?: string | null;
 }
 
@@ -281,6 +291,7 @@ export interface WebStructuredDataPart {
     | ECommerceOrdersOutput
     | ECommerceOrderDetailsOutput
     | ECommerceReturnsByOrderOutput
+    | ECommerceReturnsByCustomerOutput
     | ECommerceCreateReturnOutput
     | Record<string, unknown>;
 }
