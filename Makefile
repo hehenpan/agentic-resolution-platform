@@ -3,7 +3,7 @@
 .PHONY: staging-up staging-down prod-up prod-down
 
 staging-up:
-	docker compose -f deploy/docker-compose.staging.yml --env-file deploy/env/.env.staging up -d --build
+	docker compose -f deploy/docker-compose.staging.yml --env-file deploy/env/.env.staging up --build
 
 staging-down:
 	docker compose -f deploy/docker-compose.staging.yml down

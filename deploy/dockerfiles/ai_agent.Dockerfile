@@ -22,7 +22,7 @@ RUN pip install --no-cache-dir -e . && \
 COPY ai_agent /app
 
 # Set PYTHONPATH
-ENV PYTHONPATH=/app/src:/app:/shared_common
+ENV PYTHONPATH=/app/src:/app:/
 
 # Start LangGraph server
 CMD ["langgraph", "dev", "--host", "0.0.0.0", "--port", "2024"]

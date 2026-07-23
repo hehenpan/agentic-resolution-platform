@@ -13,9 +13,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy shared_common and api_server code
 COPY shared_common /shared_common
+COPY ai_agent_sdk /ai_agent_sdk
 COPY api_server /app
 
 # Set PYTHONPATH to include shared_common and api_server
-ENV PYTHONPATH=/app:/shared_common
+ENV PYTHONPATH=/app:/
 
 CMD ["python", "run.py"]

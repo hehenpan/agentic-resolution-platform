@@ -37,6 +37,7 @@ services:
     volumes:
       - ../api_server:/app
       - ../shared_common:/shared_common
+      - ../ai_agent_sdk:/ai_agent_sdk
       - ../data/staging/api_server:/app/data
     environment:
       - APP_ENV=staging

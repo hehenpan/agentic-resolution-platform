@@ -2,7 +2,7 @@
 
 from langgraph.graph import END, START, StateGraph
 
-from agent.core.checkpoint import LazyAsyncSqliteSaver
+from agent.core.checkpoint import get_checkpointer
 from agent.core.config import settings
 from agent.file_ingest.nodes import (
     FileIngestNodeNames,
@@ -38,7 +38,7 @@ builder.add_edge(
 )
 builder.add_edge(FileIngestNodeNames.BUILD_FILE_INGEST_OUTPUT, END)
 
-memory = LazyAsyncSqliteSaver(settings.DB_FILE)
+memory = get_checkpointer(settings.DB_FILE)
 
 file_ingest_graph = builder.compile(
     name=FileIngestGraphNames.FILE_INGEST.value,
