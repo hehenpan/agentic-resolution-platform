@@ -5,7 +5,7 @@ import { ChatMessageItem } from '../components/chat/ChatMessageItem';
 import { ChatInputBox } from '../components/chat/ChatInputBox';
 import { InterruptBanner } from '../components/chat/InterruptBanner';
 import { chatService } from '../services/chatService';
-import type { ChatMessage, HumanInputResponse } from '../types/chat';
+import type { ChatMessage, HumanInputResponse, InterruptEventData } from '../types/chat';
 
 export const WorkbenchPage: React.FC = () => {
   const {
@@ -15,6 +15,7 @@ export const WorkbenchPage: React.FC = () => {
     isStreaming,
     activeInterrupt,
     createSession,
+    fetchSessionMessages,
     addMessage,
     updateMessageContent,
     setMessageStatus,
@@ -22,8 +23,26 @@ export const WorkbenchPage: React.FC = () => {
     setActiveInterrupt,
   } = useChatStore();
 
+  const messagesEndRef = React.useRef<HTMLDivElement | null>(null);
+
   const currentSessionMeta = sessions.find((s) => s.chat_session_id === activeChatSessionId);
   const messages = activeChatSessionId ? sessionMessages[activeChatSessionId] || [] : [];
+
+  const scrollToBottom = () => {
+    if (messagesEndRef.current && typeof messagesEndRef.current.scrollIntoView === 'function') {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
+  React.useEffect(() => {
+    if (activeChatSessionId) {
+      fetchSessionMessages(activeChatSessionId);
+    }
+  }, [activeChatSessionId, fetchSessionMessages]);
+
+  React.useEffect(() => {
+    scrollToBottom();
+  }, [messages, activeInterrupt]);
 
   const handleSendMessage = async (text: string) => {
     if (!activeChatSessionId) return;
@@ -50,21 +69,30 @@ export const WorkbenchPage: React.FC = () => {
     setStreaming(true);
 
     try {
-      await chatService.streamTurn(
-        {
-          thread_id: activeChatSessionId,
-          message: { content: text },
-        },
+      await chatService.sendSessionMessageStream(
+        activeChatSessionId,
+        text,
         (event, data) => {
-          if (event === 'token' || event === 'chunk' || event === 'message') {
-            updateMessageContent(activeChatSessionId, assistantMessageId, data);
-          } else if (event === 'interrupt') {
-            try {
-              const interruptData = JSON.parse(data);
-              setActiveInterrupt(interruptData);
-            } catch {
-              // fallback
+          if (event === 'agent.output_produced' || event === 'output_produced') {
+            let textPart = '';
+            const output = data.output as { parts?: Array<{ text?: string }> } | undefined;
+            if (output?.parts?.[0]?.text) {
+              textPart = output.parts[0].text;
+            } else if (typeof data.content === 'string') {
+              textPart = data.content;
+            } else if (typeof data.text === 'string') {
+              textPart = data.text;
             }
+            if (textPart) {
+              updateMessageContent(activeChatSessionId, assistantMessageId, textPart);
+            }
+          } else if (event === 'agent.run_interrupted' || event === 'run_interrupted') {
+            setMessageStatus(activeChatSessionId, assistantMessageId, 'interrupted');
+            setActiveInterrupt(data as unknown as InterruptEventData);
+          } else if (event === 'agent.run_completed' || event === 'run_completed') {
+            setMessageStatus(activeChatSessionId, assistantMessageId, 'completed');
+          } else if (event === 'error') {
+            setMessageStatus(activeChatSessionId, assistantMessageId, 'error');
           }
         },
         (error) => {
@@ -73,7 +101,6 @@ export const WorkbenchPage: React.FC = () => {
           setStreaming(false);
         },
         () => {
-          setMessageStatus(activeChatSessionId, assistantMessageId, 'completed');
           setStreaming(false);
         }
       );
@@ -82,9 +109,9 @@ export const WorkbenchPage: React.FC = () => {
       updateMessageContent(
         activeChatSessionId,
         assistantMessageId,
-        `Agent received message: "${text}". Ready for LangGraph multi-agent execution.`
+        `Failed to send message: ${err instanceof Error ? err.message : String(err)}`
       );
-      setMessageStatus(activeChatSessionId, assistantMessageId, 'completed');
+      setMessageStatus(activeChatSessionId, assistantMessageId, 'error');
       setStreaming(false);
     }
   };
@@ -169,6 +196,9 @@ export const WorkbenchPage: React.FC = () => {
         {activeInterrupt && (
           <InterruptBanner interrupt={activeInterrupt} onResume={handleResumeInterrupt} />
         )}
+
+        {/* Scroll to bottom anchor */}
+        <div ref={messagesEndRef} />
       </div>
 
       {/* Input Box */}

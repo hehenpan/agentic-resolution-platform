@@ -6,6 +6,8 @@ import type {
   ChatSession,
   CreateChatSessionResponse,
   ChatSessionListResponse,
+  ChatMessageListResponse,
+  SendChatMessageRequest,
 } from '../types/chat';
 
 export const chatService = {
@@ -27,6 +29,91 @@ export const chatService = {
     }
     return request<ChatSessionListResponse>(`/api/v1/chat/sessions?${params.toString()}`, {
       method: 'GET',
+    });
+  },
+
+  /** Query chat history messages for session (GET /api/v1/chat/sessions/{chat_session_id}/messages) */
+  async listSessionMessages(
+    chatSessionId: string,
+    limit = 50,
+    cursor?: string
+  ): Promise<ChatMessageListResponse> {
+    const params = new URLSearchParams({ limit: String(limit) });
+    if (cursor) {
+      params.append('cursor', cursor);
+    }
+    return request<ChatMessageListResponse>(
+      `/api/v1/chat/sessions/${chatSessionId}/messages?${params.toString()}`,
+      { method: 'GET' }
+    );
+  },
+
+  /**
+   * Send message in chat session and stream response via SSE
+   * (POST /api/v1/chat/sessions/{chat_session_id}/messages)
+   *
+   * Form 1: If pre-stream validation fails, server returns HTTP status error (e.g. 400/500)
+   * with application/json body.
+   * Form 2: If success, server returns 200 OK with text/event-stream content type and SSE event payload.
+   */
+  async sendSessionMessageStream(
+    chatSessionId: string,
+    content: string,
+    onMessage: (event: string, data: Record<string, unknown>) => void,
+    onError?: (err: Error) => void,
+    onClose?: () => void,
+    signal?: AbortSignal
+  ) {
+    const payload: SendChatMessageRequest = { content };
+    await fetchEventSource(`/api/v1/chat/sessions/${chatSessionId}/messages`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+      signal,
+      async onopen(response) {
+        const contentType = response.headers.get('content-type') || '';
+        if (response.ok && contentType.includes('text/event-stream')) {
+          return;
+        }
+
+        // Form 1: Pre-stream check failed (HTTP status error with JSON or plain text body)
+        let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+        try {
+          const errorJson = await response.json();
+          if (errorJson && typeof errorJson.detail === 'string') {
+            errorMessage = errorJson.detail;
+          } else if (errorJson && typeof errorJson.message === 'string') {
+            errorMessage = errorJson.message;
+          }
+        } catch {
+          // Fallback to HTTP status message if body parsing fails
+        }
+        throw new Error(errorMessage);
+      },
+      onmessage(ev) {
+        let parsedData: Record<string, unknown> = {};
+        if (ev.data) {
+          try {
+            parsedData = JSON.parse(ev.data);
+          } catch {
+            parsedData = { raw: ev.data };
+          }
+        }
+        onMessage(ev.event || 'message', parsedData);
+      },
+      onerror(err) {
+        if (onError) {
+          onError(err instanceof Error ? err : new Error(String(err)));
+        }
+        throw err;
+      },
+      onclose() {
+        if (onClose) {
+          onClose();
+        }
+      },
     });
   },
 
@@ -120,3 +207,4 @@ export const chatService = {
     ];
   },
 };
+
