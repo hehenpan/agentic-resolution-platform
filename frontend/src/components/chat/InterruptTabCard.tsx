@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AlertCircle, Send, CheckCircle2, UserCheck, PackageSearch } from 'lucide-react';
+import { AlertCircle, Send, CheckCircle2, UserCheck, PackageSearch, FileText } from 'lucide-react';
 import type { WebHumanInputRequestedData } from '../../types/chat';
 
 interface InterruptTabCardProps {
@@ -16,20 +16,38 @@ export const InterruptTabCard: React.FC<InterruptTabCardProps> = ({
   const schemaId = requestData?.request?.schema_id || '';
   const prompt = requestData?.request?.prompt || 'Human-in-the-Loop input required.';
   
-  const [email, setEmail] = useState('');
+  const [inputValue, setInputValue] = useState('');
   const [submitted, setSubmitted] = useState(false);
 
   const isGetUser = schemaId.includes('get_user');
   const isGetOrders = schemaId.includes('get_orders');
+  const isGetOrderDetails = schemaId.includes('get_order_details');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email.trim()) return;
+    if (!inputValue.trim()) return;
 
     setSubmitted(true);
-    const payload = { email: email.trim() };
-    const displayContent = `[Submitted Form] Customer Email: ${email.trim()}`;
+    let payload: Record<string, unknown>;
+    let displayContent: string;
+
+    if (isGetOrderDetails) {
+      const orderIdNum = parseInt(inputValue.trim(), 10);
+      payload = { order_id: isNaN(orderIdNum) ? inputValue.trim() : orderIdNum };
+      displayContent = `[Submitted Form] Order ID: ${inputValue.trim()}`;
+    } else {
+      payload = { email: inputValue.trim() };
+      displayContent = `[Submitted Form] Customer Email: ${inputValue.trim()}`;
+    }
+
     onSubmit(payload, displayContent);
+  };
+
+  const getHeaderTitle = () => {
+    if (isGetUser) return 'Action Required: Customer Lookup Interrupt';
+    if (isGetOrders) return 'Action Required: Customer Orders Interrupt';
+    if (isGetOrderDetails) return 'Action Required: Order Details Interrupt';
+    return 'Action Required: Human Input Interrupt';
   };
 
   return (
@@ -40,10 +58,12 @@ export const InterruptTabCard: React.FC<InterruptTabCardProps> = ({
           <UserCheck className="w-4 h-4 text-amber-400 shrink-0" />
         ) : isGetOrders ? (
           <PackageSearch className="w-4 h-4 text-amber-400 shrink-0" />
+        ) : isGetOrderDetails ? (
+          <FileText className="w-4 h-4 text-amber-400 shrink-0" />
         ) : (
           <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
         )}
-        <span>Action Required: Customer Lookup Interrupt</span>
+        <span>{getHeaderTitle()}</span>
       </div>
 
       {/* Prompt / Instructions */}
@@ -53,16 +73,16 @@ export const InterruptTabCard: React.FC<InterruptTabCardProps> = ({
       {!submitted ? (
         <form onSubmit={handleSubmit} className="space-y-3 pt-1">
           <div className="flex flex-col space-y-1.5">
-            <label htmlFor="customer-email-input" className="text-xs font-medium text-amber-300/90">
-              Customer Email Address <span className="text-rose-400">*</span>
+            <label htmlFor="interrupt-input-field" className="text-xs font-medium text-amber-300/90">
+              {isGetOrderDetails ? 'Order ID' : 'Customer Email Address'} <span className="text-rose-400">*</span>
             </label>
             <input
-              id="customer-email-input"
-              type="email"
+              id="interrupt-input-field"
+              type={isGetOrderDetails ? 'number' : 'email'}
               required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="e.g. customer@example.com"
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              placeholder={isGetOrderDetails ? 'e.g. 88412' : 'e.g. customer@example.com'}
               disabled={disabled}
               className="w-full px-3.5 py-2.5 text-xs bg-slate-900 border border-amber-500/40 rounded-xl text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500/50 transition-all font-medium shadow-inner"
             />
@@ -75,7 +95,7 @@ export const InterruptTabCard: React.FC<InterruptTabCardProps> = ({
 
             <button
               type="submit"
-              disabled={disabled || !email.trim()}
+              disabled={disabled || !inputValue.trim()}
               className="inline-flex items-center space-x-1.5 px-4 py-1.5 bg-amber-500 hover:bg-amber-600 active:scale-95 disabled:opacity-50 text-slate-950 font-semibold text-xs rounded-xl shadow-md transition-all shrink-0"
             >
               <Send className="w-3.5 h-3.5" />

@@ -1,11 +1,12 @@
 import React from 'react';
 import { Bot, User, Wrench, CheckCircle2 } from 'lucide-react';
-import type { ChatMessage, ECommerceUserOutput, ECommerceOrdersOutput } from '../../types/chat';
+import type { ChatMessage, ECommerceUserOutput, ECommerceOrdersOutput, ECommerceOrderDetailsOutput } from '../../types/chat';
 import { useAuthStore } from '../../store/authStore';
 import { useChatStore } from '../../store/chatStore';
 import { InterruptTabCard } from './InterruptTabCard';
 import { UserInfoCard } from './UserInfoCard';
 import { OrdersCard } from './OrdersCard';
+import { OrderDetailsCard } from './OrderDetailsCard';
 
 interface ChatMessageItemProps {
   message: ChatMessage;
@@ -80,6 +81,8 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({ message }) => 
                     return <UserInfoCard key={idx} data={part.data as ECommerceUserOutput} />;
                   } else if (schemaId === 'ecommerce.orders_result.v1') {
                     return <OrdersCard key={idx} data={part.data as ECommerceOrdersOutput} />;
+                  } else if (schemaId === 'ecommerce.order_details_result.v1') {
+                    return <OrderDetailsCard key={idx} data={part.data as ECommerceOrderDetailsOutput} />;
                   }
                 }
                 return null;

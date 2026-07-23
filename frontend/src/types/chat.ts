@@ -208,6 +208,26 @@ export interface ECommerceOrdersOutput {
   orders: ECommerceOrderOutput[];
 }
 
+export interface ECommerceOrderItemOutput {
+  item_id: number;
+  sku_id: number;
+  sku_code: string;
+  name: string;
+  quantity: number;
+  price: number;
+}
+
+export interface ECommerceOrderDetailsOutput {
+  exists: boolean;
+  order?: ECommerceOrderOutput | null;
+  items: ECommerceOrderItemOutput[];
+}
+
+export interface WebGetOrderDetailsByOrderIdInputModel {
+  order_id?: number | null;
+  llm_text?: string | null;
+}
+
 export interface WebTextPart {
   kind: 'text';
   text: string;
@@ -216,7 +236,7 @@ export interface WebTextPart {
 export interface WebStructuredDataPart {
   kind: 'structured_data';
   schema_id: WebStructuredDataSchemaId | string;
-  data: ECommerceUserOutput | ECommerceOrdersOutput | Record<string, unknown>;
+  data: ECommerceUserOutput | ECommerceOrdersOutput | ECommerceOrderDetailsOutput | Record<string, unknown>;
 }
 
 export type WebAgentOutputPart = WebTextPart | WebStructuredDataPart;

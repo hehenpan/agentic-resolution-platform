@@ -207,6 +207,17 @@ function apiMockPlugin(): Plugin {
                   },
                 },
               },
+              getorderdetails: {
+                schema_id: 'human_input.get_order_details.v1',
+                prompt: 'Please enter positive Order ID to look up order details.',
+                input_schema: {
+                  type: 'object',
+                  properties: {
+                    order_id: { type: 'integer', description: 'Positive order identifier' },
+                    llm_text: { type: 'string', description: 'Raw natural language text' },
+                  },
+                },
+              },
             };
 
             const normalizedContent = content.trim().toLowerCase();
@@ -377,6 +388,73 @@ function apiMockPlugin(): Plugin {
                           kind: 'structured_data',
                           schema_id: 'ecommerce.orders_result.v1',
                           data: ordersData,
+                        },
+                      ],
+                    },
+                  })}\n\n`
+                );
+
+                res.write(
+                  `event: agent.run_completed\ndata: ${JSON.stringify({
+                    event_id: `evt_mock_${now}_rc`,
+                    kind: 'agent.run_completed',
+                  })}\n\n`
+                );
+                res.end();
+              }, 300);
+            } else if (schemaId === 'human_input.get_order_details.v1') {
+              let orderIdVal = Number(resumePayload.order_id || 0);
+              if (!orderIdVal && resumePayload.llm_text) {
+                const text = String(resumePayload.llm_text);
+                const match = text.match(/\d+/);
+                orderIdVal = match ? parseInt(match[0], 10) : 88412;
+              }
+              if (!orderIdVal) orderIdVal = 88412;
+
+              const textMessage = `Successfully retrieved order details for Order #${orderIdVal}.`;
+              const orderDetailsData = {
+                exists: true,
+                order: {
+                  order_id: orderIdVal,
+                  user_id: 1001,
+                  email: 'alex@example.com',
+                  status: 1, // PAID
+                  total_amount: 199.99,
+                  created_ts: 1753236000,
+                },
+                items: [
+                  {
+                    item_id: 1,
+                    sku_id: 501,
+                    sku_code: 'SKU-PRO-01',
+                    name: 'Wireless Noise-Canceling Headphones',
+                    quantity: 1,
+                    price: 149.99,
+                  },
+                  {
+                    item_id: 2,
+                    sku_id: 502,
+                    sku_code: 'SKU-ACC-02',
+                    name: 'Hard Shell Carrying Case',
+                    quantity: 1,
+                    price: 50.0,
+                  },
+                ],
+              };
+
+              setTimeout(() => {
+                res.write(
+                  `event: agent.output_produced\ndata: ${JSON.stringify({
+                    event_id: `evt_mock_${now}_out`,
+                    kind: 'agent.output_produced',
+                    output: {
+                      output_id: `out_mock_${now}`,
+                      parts: [
+                        { kind: 'text', text: textMessage },
+                        {
+                          kind: 'structured_data',
+                          schema_id: 'ecommerce.order_details_result.v1',
+                          data: orderDetailsData,
                         },
                       ],
                     },
