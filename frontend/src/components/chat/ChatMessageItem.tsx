@@ -1,13 +1,16 @@
 import React from 'react';
 import { Bot, User, Wrench, CheckCircle2 } from 'lucide-react';
 import type { ChatMessage } from '../../types/chat';
+import { useAuthStore } from '../../store/authStore';
 
 interface ChatMessageItemProps {
   message: ChatMessage;
 }
 
 export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({ message }) => {
+  const { userEmail } = useAuthStore();
   const isUser = message.role === 'user';
+  const userName = userEmail || 'Customer Support';
 
   return (
     <div className={`flex space-x-3 max-w-4xl ${isUser ? 'ml-auto flex-row-reverse space-x-reverse' : ''}`}>
@@ -22,10 +25,20 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({ message }) => 
       </div>
 
       <div className={`flex-1 space-y-2 ${isUser ? 'text-right' : ''}`}>
-        <div className="flex items-center space-x-2 text-xs text-muted-foreground mb-1">
-          <span className="font-semibold text-foreground">{isUser ? 'User' : 'Agent Assistant'}</span>
-          <span>•</span>
-          <span>{new Date(message.timestamp).toLocaleTimeString()}</span>
+        <div className={`flex items-center space-x-2 text-xs text-muted-foreground mb-1 ${isUser ? 'justify-end' : ''}`}>
+          {isUser ? (
+            <>
+              <span>{new Date(message.timestamp).toLocaleTimeString()}</span>
+              <span>•</span>
+              <span className="font-semibold text-foreground">{userName}</span>
+            </>
+          ) : (
+            <>
+              <span className="font-semibold text-foreground">Agent Assistant</span>
+              <span>•</span>
+              <span>{new Date(message.timestamp).toLocaleTimeString()}</span>
+            </>
+          )}
         </div>
 
         <div

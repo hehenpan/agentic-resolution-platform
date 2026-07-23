@@ -2,7 +2,7 @@
 
 export interface LoginRequest {
   email: string;
-  password: str;
+  password: string;
 }
 
 export interface LoginResponse {

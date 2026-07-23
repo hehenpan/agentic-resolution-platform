@@ -2,9 +2,12 @@ import { render, screen } from '@testing-library/react';
 import { describe, it, expect } from 'vitest';
 import { ChatMessageItem } from './ChatMessageItem';
 import type { ChatMessage } from '../../types/chat';
+import { useAuthStore } from '../../store/authStore';
 
 describe('ChatMessageItem Component', () => {
-  it('renders user message correctly', () => {
+  it('renders user message with logged-in user email correctly', () => {
+    useAuthStore.setState({ userEmail: 'agent_user@company.com' });
+
     const userMsg: ChatMessage = {
       id: 'msg_1',
       role: 'user',
@@ -13,7 +16,7 @@ describe('ChatMessageItem Component', () => {
     };
 
     render(<ChatMessageItem message={userMsg} />);
-    expect(screen.getByText('User')).toBeInTheDocument();
+    expect(screen.getByText('agent_user@company.com')).toBeInTheDocument();
     expect(screen.getByText('Process order refund')).toBeInTheDocument();
   });
 

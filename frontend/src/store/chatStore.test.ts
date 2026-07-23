@@ -81,4 +81,79 @@ describe('chatStore', () => {
     useChatStore.getState().setActiveChatSession(null);
     expect(useChatStore.getState().activeChatSessionId).toBeNull();
   });
+
+  it('fetchSessionMessages maps history items into ChatMessage state', async () => {
+    const mockItems = [
+      {
+        id: 1,
+        event_id: 'evt_101',
+        chat_session_id: 'cs_101',
+        thread_id: 'thread_1',
+        run_id: 'run_1',
+        sender_type: 1,
+        event_kind: 'user_message',
+        sequence: 0,
+        payload_json: JSON.stringify({ content: 'User question' }),
+        create_ts_ms: 1753236000000,
+      },
+      {
+        id: 2,
+        event_id: 'evt_102',
+        chat_session_id: 'cs_101',
+        thread_id: 'thread_1',
+        run_id: 'run_1',
+        sender_type: 2,
+        event_kind: 'agent.output_produced',
+        sequence: 1,
+        payload_json: JSON.stringify({ output: { parts: [{ text: 'Agent response' }] } }),
+        create_ts_ms: 1753236001000,
+      },
+    ];
+
+    vi.spyOn(chatService, 'listSessionMessages').mockResolvedValueOnce({
+      code: 0,
+      message: 'Success',
+      data: {
+        has_more: false,
+        next_cursor: null,
+        items: mockItems,
+      },
+    });
+
+    await useChatStore.getState().fetchSessionMessages('cs_101');
+
+    const messages = useChatStore.getState().sessionMessages['cs_101'];
+    expect(messages).toHaveLength(2);
+    expect(messages[0].role).toBe('user');
+    expect(messages[0].content).toBe('User question');
+    expect(messages[1].role).toBe('assistant');
+    expect(messages[1].content).toBe('Agent response');
+  });
+
+  it('sendMessageStream handles SSE stream events and error status', async () => {
+    vi.spyOn(chatService, 'sendSessionMessageStream').mockImplementation(
+      async (_sessionId, _content, onMessage, _onError, onClose) => {
+        onMessage('agent.output_produced', {
+          output: { parts: [{ text: 'Chunk 1 ' }] },
+        });
+        onMessage('agent.output_produced', {
+          output: { parts: [{ text: 'Chunk 2' }] },
+        });
+        onMessage('agent.run_completed', { kind: 'agent.run_completed' });
+        if (onClose) onClose();
+      }
+    );
+
+    await useChatStore.getState().sendMessageStream('cs_101', 'Test message');
+
+    const messages = useChatStore.getState().sessionMessages['cs_101'];
+    expect(messages).toHaveLength(2);
+    expect(messages[0].role).toBe('user');
+    expect(messages[0].content).toBe('Test message');
+    expect(messages[1].role).toBe('assistant');
+    expect(messages[1].content).toBe('Chunk 1 Chunk 2');
+    expect(messages[1].status).toBe('completed');
+    expect(useChatStore.getState().isStreaming).toBe(false);
+  });
 });
+

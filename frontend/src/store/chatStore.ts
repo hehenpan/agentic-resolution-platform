@@ -14,6 +14,8 @@ interface ChatStoreState {
   // Actions
   fetchSessions: () => Promise<void>;
   createSession: (title?: string) => Promise<string | null>;
+  fetchSessionMessages: (chatSessionId: string) => Promise<void>;
+  sendMessageStream: (chatSessionId: string, content: string) => Promise<void>;
   setActiveChatSession: (chatSessionId: string | null) => void;
   addMessage: (chatSessionId: string, message: ChatMessage) => void;
   updateMessageContent: (chatSessionId: string, messageId: string, contentDelta: string) => void;
@@ -88,6 +90,124 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
         },
       }));
       return newSessionId;
+    }
+  },
+
+  fetchSessionMessages: async (chatSessionId: string) => {
+    try {
+      const res = await chatService.listSessionMessages(chatSessionId);
+      if (res.code === 0 && res.data?.items) {
+        const mappedMessages: ChatMessage[] = res.data.items.map((item) => {
+          let textContent = '';
+          try {
+            const parsed = JSON.parse(item.payload_json);
+            if (typeof parsed === 'string') {
+              textContent = parsed;
+            } else if (parsed?.content) {
+              textContent = String(parsed.content);
+            } else if (parsed?.output?.parts?.[0]?.text) {
+              textContent = String(parsed.output.parts[0].text);
+            } else {
+              textContent = item.payload_json;
+            }
+          } catch {
+            textContent = item.payload_json;
+          }
+
+          let role: ChatMessage['role'] = 'assistant';
+          if (item.sender_type === 1) {
+            role = 'user';
+          } else if (item.sender_type === 3) {
+            role = 'system';
+          }
+
+          return {
+            id: item.event_id || `msg_${item.id || Date.now()}`,
+            role,
+            content: textContent,
+            timestamp: new Date(item.create_ts_ms).toISOString(),
+            status: 'completed',
+          };
+        });
+
+        set((state) => ({
+          sessionMessages: {
+            ...state.sessionMessages,
+            [chatSessionId]: mappedMessages,
+          },
+        }));
+      }
+    } catch (err: unknown) {
+      set({ error: err instanceof Error ? err.message : 'Failed to fetch session messages' });
+    }
+  },
+
+  sendMessageStream: async (chatSessionId: string, content: string) => {
+    const userMsgId = `user_${Date.now()}`;
+    const agentMsgId = `agent_${Date.now()}`;
+
+    const userMessage: ChatMessage = {
+      id: userMsgId,
+      role: 'user',
+      content,
+      timestamp: new Date().toISOString(),
+      status: 'completed',
+    };
+
+    const agentPlaceholder: ChatMessage = {
+      id: agentMsgId,
+      role: 'assistant',
+      content: '',
+      timestamp: new Date().toISOString(),
+      status: 'streaming',
+    };
+
+    get().addMessage(chatSessionId, userMessage);
+    get().addMessage(chatSessionId, agentPlaceholder);
+    set({ isStreaming: true, error: null });
+
+    try {
+      await chatService.sendSessionMessageStream(
+        chatSessionId,
+        content,
+        (event, data) => {
+          if (event === 'agent.output_produced' || event === 'output_produced') {
+            let textPart = '';
+            const output = data.output as { parts?: Array<{ text?: string }> } | undefined;
+            if (output?.parts?.[0]?.text) {
+              textPart = output.parts[0].text;
+            } else if (typeof data.content === 'string') {
+              textPart = data.content;
+            } else if (typeof data.text === 'string') {
+              textPart = data.text;
+            }
+
+            if (textPart) {
+              get().updateMessageContent(chatSessionId, agentMsgId, textPart);
+            }
+          } else if (event === 'agent.run_completed' || event === 'run_completed') {
+            get().setMessageStatus(chatSessionId, agentMsgId, 'completed');
+          } else if (event === 'agent.run_interrupted' || event === 'run_interrupted') {
+            get().setMessageStatus(chatSessionId, agentMsgId, 'interrupted');
+            get().setActiveInterrupt(data as unknown as InterruptEventData);
+          } else if (event === 'error') {
+            const detailStr = (data.detail as string) || 'Stream encountered error';
+            get().setMessageStatus(chatSessionId, agentMsgId, 'error');
+            set({ error: detailStr });
+          }
+        },
+        (err) => {
+          get().setMessageStatus(chatSessionId, agentMsgId, 'error');
+          set({ error: err.message, isStreaming: false });
+        },
+        () => {
+          set({ isStreaming: false });
+        }
+      );
+    } catch (err: unknown) {
+      const errorMsg = err instanceof Error ? err.message : 'Failed to send chat message';
+      get().setMessageStatus(chatSessionId, agentMsgId, 'error');
+      set({ error: errorMsg, isStreaming: false });
     }
   },
 

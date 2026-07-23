@@ -89,6 +89,58 @@ export interface ChatMessage {
   }>;
 }
 
+export enum ChatMessageSenderType {
+  USER = 1,
+  AGENT = 2,
+  SYSTEM = 3,
+}
+
+export interface ChatMessageItem {
+  id?: number | null;
+  event_id: string;
+  chat_session_id: string;
+  thread_id: string;
+  run_id: string;
+  sender_type: ChatMessageSenderType;
+  event_kind: string;
+  sequence: number;
+  payload_json: string;
+  create_ts_ms: number;
+}
+
+export interface ChatMessageListResponseData {
+  has_more: boolean;
+  next_cursor?: string | null;
+  items: ChatMessageItem[];
+}
+
+export interface ChatMessageListResponse {
+  code: number;
+  message: string;
+  data: ChatMessageListResponseData;
+}
+
+export interface SendChatMessageRequest {
+  content: string;
+}
+
+export enum ChatSSEEventType {
+  USER_MESSAGE = 'user_message',
+  OUTPUT_PRODUCED = 'agent.output_produced',
+  PROGRESS_REPORTED = 'agent.progress_reported',
+  HUMAN_INPUT_REQUESTED = 'agent.human_input_requested',
+  RUN_COMPLETED = 'agent.run_completed',
+  RUN_INTERRUPTED = 'agent.run_interrupted',
+  RUN_FAILED = 'agent.run_failed',
+  ERROR = 'error',
+}
+
+export interface ChatSSEEvent<T = Record<string, unknown>> {
+  event_id: string;
+  event_type: ChatSSEEventType | string;
+  data: T;
+}
+
 export interface InterruptEventData {
   interrupt_id: string;
   thread_id: string;
@@ -111,3 +163,4 @@ export interface ChatSession {
   status: AgentRunStatus;
   activeInterrupt?: InterruptEventData | null;
 }
+
