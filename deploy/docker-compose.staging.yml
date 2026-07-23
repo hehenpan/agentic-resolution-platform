@@ -1,0 +1,87 @@
+version: '3.8'
+
+services:
+  nginx:
+    image: nginx:alpine
+    container_name: platform_nginx_staging
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.staging.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - frontend
+      - api_server
+    networks:
+      - platform-network
+
+  frontend:
+    build:
+      context: ..
+      dockerfile: deploy/dockerfiles/frontend.staging.Dockerfile
+    container_name: platform_frontend_staging
+    ports:
+      - "3000:3000"
+    volumes:
+      - ../frontend:/app
+      - /app/node_modules
+    networks:
+      - platform-network
+
+  api_server:
+    build:
+      context: ..
+      dockerfile: deploy/dockerfiles/api_server.Dockerfile
+    container_name: platform_api_server_staging
+    ports:
+      - "8000:8000"
+    volumes:
+      - ../api_server:/app
+      - ../shared_common:/shared_common
+      - ../data/staging/api_server:/app/data
+    environment:
+      - APP_ENV=staging
+    depends_on:
+      - ai_agent
+    networks:
+      - platform-network
+
+  ai_agent:
+    build:
+      context: ..
+      dockerfile: deploy/dockerfiles/ai_agent.Dockerfile
+    container_name: platform_ai_agent_staging
+    ports:
+      - "2024:2024"
+    volumes:
+      - ../ai_agent:/app
+      - ../shared_common:/shared_common
+      - ../data/staging/ai_agent:/app/data
+    environment:
+      - APP_ENV=staging
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - TAVILY_API_KEY=${TAVILY_API_KEY}
+    depends_on:
+      - mcp_server
+    networks:
+      - platform-network
+
+  mcp_server:
+    build:
+      context: ..
+      dockerfile: deploy/dockerfiles/mcp_server.Dockerfile
+    container_name: platform_mcp_server_staging
+    ports:
+      - "8500:8500"
+    volumes:
+      - ../mcp_server:/app
+      - ../shared_common:/shared_common
+      - ../data/staging/mcp_server:/app/data
+    environment:
+      - APP_ENV=staging
+    networks:
+      - platform-network
+
+networks:
+  platform-network:
+    name: platform_network_staging
+    driver: bridge
