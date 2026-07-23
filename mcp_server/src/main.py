@@ -2,7 +2,7 @@ import uvicorn
 from mcp.server.fastmcp import FastMCP
 from core.logger import setup_logging
 from core.database import init_db
-from config import settings
+from config import settings, BASE_DIR
 
 # Initialize Logging
 logger = setup_logging()
@@ -35,7 +35,7 @@ def run() -> None:
         port=settings.SERVER_PORT,
         workers=settings.SERVER_WORKERS,
         log_level=settings.LOG_LEVEL.lower(),
-        app_dir=str(settings.BASE_DIR / "src")
+        app_dir=str(BASE_DIR / "src")
     )
 
 

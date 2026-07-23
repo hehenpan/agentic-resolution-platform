@@ -1,10 +1,10 @@
 from langgraph.graph import StateGraph
 from agent.core.config import settings
-from agent.core.checkpoint import LazyAsyncSqliteSaver
+from agent.core.checkpoint import get_checkpointer
 from agent.example_graph.state import State, Context
 from agent.example_graph.nodes import call_model
 
-memory = LazyAsyncSqliteSaver(settings.DB_FILE)
+memory = get_checkpointer(settings.DB_FILE)
 
 example_graph = (
     StateGraph(State, context_schema=Context)

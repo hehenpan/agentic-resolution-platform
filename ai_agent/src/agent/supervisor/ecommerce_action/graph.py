@@ -4,7 +4,7 @@ from enum import Enum
 
 from langgraph.graph import END, START, StateGraph
 
-from agent.core.checkpoint import LazyAsyncSqliteSaver
+from agent.core.checkpoint import get_checkpointer
 from agent.core.config import settings
 from agent.supervisor.ecommerce_action.nodes import (
     action_agent,
@@ -68,7 +68,7 @@ builder.add_conditional_edges(
 
 builder.add_edge(EcommerceActionNodeNames.EXECUTE_CREATE_RETURN.value, EcommerceActionNodeNames.ACTION_AGENT.value)
 
-memory = LazyAsyncSqliteSaver(settings.DB_FILE)
+memory = get_checkpointer(settings.DB_FILE)
 
 ecommerce_action_graph = builder.compile(
     name=SupervisorGraphNames.ECOMMERCE_ACTION.value,
