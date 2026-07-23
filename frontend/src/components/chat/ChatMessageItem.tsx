@@ -1,7 +1,11 @@
 import React from 'react';
 import { Bot, User, Wrench, CheckCircle2 } from 'lucide-react';
-import type { ChatMessage } from '../../types/chat';
+import type { ChatMessage, ECommerceUserOutput, ECommerceOrdersOutput } from '../../types/chat';
 import { useAuthStore } from '../../store/authStore';
+import { useChatStore } from '../../store/chatStore';
+import { InterruptTabCard } from './InterruptTabCard';
+import { UserInfoCard } from './UserInfoCard';
+import { OrdersCard } from './OrdersCard';
 
 interface ChatMessageItemProps {
   message: ChatMessage;
@@ -9,8 +13,16 @@ interface ChatMessageItemProps {
 
 export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({ message }) => {
   const { userEmail } = useAuthStore();
+  const { activeChatSessionId, resumeSessionMessageStream } = useChatStore();
+
   const isUser = message.role === 'user';
   const userName = userEmail || 'Customer Support';
+
+  const handleInterruptSubmit = (payload: Record<string, unknown>, displayContent?: string) => {
+    if (activeChatSessionId) {
+      resumeSessionMessageStream(activeChatSessionId, payload, displayContent);
+    }
+  };
 
   return (
     <div className={`flex space-x-3 max-w-4xl ${isUser ? 'ml-auto flex-row-reverse space-x-reverse' : ''}`}>
@@ -48,7 +60,32 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({ message }) => 
               : 'glass-panel text-foreground rounded-tl-none border border-border'
           }`}
         >
-          <div className="whitespace-pre-wrap">{message.content}</div>
+          {message.content && <div className="whitespace-pre-wrap">{message.content}</div>}
+
+          {/* Render Human Input Interrupt Tab Card */}
+          {!isUser && message.humanInputRequest && (
+            <InterruptTabCard
+              requestData={message.humanInputRequest}
+              onSubmit={handleInterruptSubmit}
+            />
+          )}
+
+          {/* Render Structured Data Cards */}
+          {!isUser && message.structuredParts && message.structuredParts.length > 0 && (
+            <div className="space-y-3">
+              {message.structuredParts.map((part, idx) => {
+                if (part.kind === 'structured_data') {
+                  const schemaId = String(part.schema_id || '');
+                  if (schemaId === 'ecommerce.user_result.v1') {
+                    return <UserInfoCard key={idx} data={part.data as ECommerceUserOutput} />;
+                  } else if (schemaId === 'ecommerce.orders_result.v1') {
+                    return <OrdersCard key={idx} data={part.data as ECommerceOrdersOutput} />;
+                  }
+                }
+                return null;
+              })}
+            </div>
+          )}
 
           {/* Render Tool Calls if present */}
           {message.toolCalls && message.toolCalls.length > 0 && (
@@ -80,3 +117,4 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({ message }) => 
     </div>
   );
 };
+

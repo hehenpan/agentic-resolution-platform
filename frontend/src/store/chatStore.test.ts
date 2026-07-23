@@ -155,5 +155,81 @@ describe('chatStore', () => {
     expect(messages[1].status).toBe('completed');
     expect(useChatStore.getState().isStreaming).toBe(false);
   });
+
+  it('resumeSessionMessageStream calls chatService.resumeSessionMessageStream and updates state', async () => {
+    vi.spyOn(chatService, 'resumeSessionMessageStream').mockImplementation(
+      async (_sessionId, _req, onMessage, _onError, onClose) => {
+        onMessage('agent.output_produced', {
+          output: {
+            parts: [
+              { kind: 'text', text: 'Retrieved user info.' },
+              {
+                kind: 'structured_data',
+                schema_id: 'ecommerce.user_result.v1',
+                data: { exists: true, email: 'alex@example.com' },
+              },
+            ],
+          },
+        });
+        onMessage('agent.run_completed', { kind: 'agent.run_completed' });
+        if (onClose) onClose();
+      }
+    );
+
+    useChatStore.setState({
+      activeInterrupt: {
+        interrupt_id: 'intr_1001',
+        thread_id: 'thread_1001',
+        schema_id: 'human_input.get_user.v1',
+      },
+    });
+
+    await useChatStore.getState().resumeSessionMessageStream('cs_101', { email: 'alex@example.com' });
+
+    const messages = useChatStore.getState().sessionMessages['cs_101'];
+    expect(messages).toHaveLength(2);
+    expect(messages[0].role).toBe('user');
+    expect(messages[0].content).toContain('alex@example.com');
+    expect(messages[1].role).toBe('assistant');
+    expect(messages[1].content).toBe('Retrieved user info.');
+    expect(messages[1].structuredParts).toEqual([
+      {
+        kind: 'structured_data',
+        schema_id: 'ecommerce.user_result.v1',
+        data: { exists: true, email: 'alex@example.com' },
+      },
+    ]);
+    expect(useChatStore.getState().activeInterrupt).toBeNull();
+  });
+
+  it('sendMessageStream automatically delegates to resumeSessionMessageStream when activeInterrupt is set', async () => {
+    const resumeSpy = vi
+      .spyOn(chatService, 'resumeSessionMessageStream')
+      .mockImplementation(async (_sessionId, _req, _onMessage, _onError, onClose) => {
+        if (onClose) onClose();
+      });
+
+    useChatStore.setState({
+      activeInterrupt: {
+        interrupt_id: 'intr_1002',
+        thread_id: 'thread_1002',
+        schema_id: 'human_input.get_orders.v1',
+      },
+    });
+
+    await useChatStore.getState().sendMessageStream('cs_101', 'Natural language text for resume');
+
+    expect(resumeSpy).toHaveBeenCalledWith(
+      'cs_101',
+      expect.objectContaining({
+        schema_id: 'human_input.get_orders.v1',
+        resume_payload: { llm_text: 'Natural language text for resume' },
+      }),
+      expect.any(Function),
+      expect.any(Function),
+      expect.any(Function)
+    );
+  });
 });
+
 

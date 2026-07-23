@@ -3,9 +3,6 @@ import { MessageSquarePlus, Sparkles } from 'lucide-react';
 import { useChatStore } from '../store/chatStore';
 import { ChatMessageItem } from '../components/chat/ChatMessageItem';
 import { ChatInputBox } from '../components/chat/ChatInputBox';
-import { InterruptBanner } from '../components/chat/InterruptBanner';
-import { chatService } from '../services/chatService';
-import type { ChatMessage, HumanInputResponse, InterruptEventData } from '../types/chat';
 
 export const WorkbenchPage: React.FC = () => {
   const {
@@ -13,14 +10,9 @@ export const WorkbenchPage: React.FC = () => {
     sessionMessages,
     activeChatSessionId,
     isStreaming,
-    activeInterrupt,
     createSession,
     fetchSessionMessages,
-    addMessage,
-    updateMessageContent,
-    setMessageStatus,
-    setStreaming,
-    setActiveInterrupt,
+    sendMessageStream,
   } = useChatStore();
 
   const messagesEndRef = React.useRef<HTMLDivElement | null>(null);
@@ -42,115 +34,29 @@ export const WorkbenchPage: React.FC = () => {
 
   React.useEffect(() => {
     scrollToBottom();
-  }, [messages, activeInterrupt]);
+  }, [messages]);
 
   const handleSendMessage = async (text: string) => {
     if (!activeChatSessionId) return;
-
-    const userMessage: ChatMessage = {
-      id: `msg_user_${Date.now()}`,
-      role: 'user',
-      content: text,
-      timestamp: new Date().toISOString(),
-      status: 'completed',
-    };
-
-    const assistantMessageId = `msg_agent_${Date.now()}`;
-    const assistantMessage: ChatMessage = {
-      id: assistantMessageId,
-      role: 'assistant',
-      content: '',
-      timestamp: new Date().toISOString(),
-      status: 'streaming',
-    };
-
-    addMessage(activeChatSessionId, userMessage);
-    addMessage(activeChatSessionId, assistantMessage);
-    setStreaming(true);
-
-    try {
-      await chatService.sendSessionMessageStream(
-        activeChatSessionId,
-        text,
-        (event, data) => {
-          if (event === 'agent.output_produced' || event === 'output_produced') {
-            let textPart = '';
-            const output = data.output as { parts?: Array<{ text?: string }> } | undefined;
-            if (output?.parts?.[0]?.text) {
-              textPart = output.parts[0].text;
-            } else if (typeof data.content === 'string') {
-              textPart = data.content;
-            } else if (typeof data.text === 'string') {
-              textPart = data.text;
-            }
-            if (textPart) {
-              updateMessageContent(activeChatSessionId, assistantMessageId, textPart);
-            }
-          } else if (event === 'agent.run_interrupted' || event === 'run_interrupted') {
-            setMessageStatus(activeChatSessionId, assistantMessageId, 'interrupted');
-            setActiveInterrupt(data as unknown as InterruptEventData);
-          } else if (event === 'agent.run_completed' || event === 'run_completed') {
-            setMessageStatus(activeChatSessionId, assistantMessageId, 'completed');
-          } else if (event === 'error') {
-            setMessageStatus(activeChatSessionId, assistantMessageId, 'error');
-          }
-        },
-        (error) => {
-          console.error('SSE Stream error:', error);
-          setMessageStatus(activeChatSessionId, assistantMessageId, 'error');
-          setStreaming(false);
-        },
-        () => {
-          setStreaming(false);
-        }
-      );
-    } catch (err) {
-      console.error('Failed to trigger agent turn:', err);
-      updateMessageContent(
-        activeChatSessionId,
-        assistantMessageId,
-        `Failed to send message: ${err instanceof Error ? err.message : String(err)}`
-      );
-      setMessageStatus(activeChatSessionId, assistantMessageId, 'error');
-      setStreaming(false);
-    }
-  };
-
-  const handleResumeInterrupt = async (response: HumanInputResponse) => {
-    if (!activeInterrupt || !activeChatSessionId) return;
-
-    const resumePayload = {
-      thread_id: activeChatSessionId,
-      interrupt_id: activeInterrupt.interrupt_id,
-      resume_cursor: { checkpoint_id: activeInterrupt.checkpoint_id },
-      response,
-    };
-
-    try {
-      await chatService.resumeInterrupt(resumePayload);
-      setActiveInterrupt(null);
-    } catch (err) {
-      console.error('Resume interrupt failed:', err);
-      setActiveInterrupt(null);
-    }
+    await sendMessageStream(activeChatSessionId, text);
   };
 
   // If no chat session is selected, render empty state UI
   if (!activeChatSessionId) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center h-[calc(100vh-4rem)] bg-background p-8 text-center animate-fade-in">
-        <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-blue-600/20 to-indigo-500/20 border border-blue-500/30 flex items-center justify-center text-blue-400 mb-6 shadow-xl shadow-blue-500/10">
+      <div className="flex-1 h-[calc(100vh-4rem)] flex flex-col items-center justify-center text-center p-8 space-y-4">
+        <div className="w-16 h-16 rounded-2xl bg-indigo-600/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
           <Sparkles className="w-8 h-8" />
         </div>
-        <h2 className="text-xl font-bold text-foreground tracking-tight mb-2">
-          No Chat Session Selected
-        </h2>
-        <p className="text-sm text-muted-foreground max-w-md mb-8">
-          Select an existing chat session from the left sidebar or create a new session to start interacting with the multi-agent orchestrator.
-        </p>
+        <div className="max-w-md space-y-2">
+          <h2 className="text-xl font-bold text-foreground">No Chat Session Selected</h2>
+          <p className="text-sm text-muted-foreground">
+            Select an existing chat session from the left sidebar or create a new session to start.
+          </p>
+        </div>
         <button
-          onClick={() => createSession('New Chat Session')}
-          className="inline-flex items-center space-x-2 py-3 px-5 rounded-xl bg-primary text-primary-foreground font-medium hover:opacity-90 transition-all shadow-lg shadow-blue-500/25"
+          onClick={() => createSession('New Chat Workspace')}
+          className="inline-flex items-center space-x-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-sm transition-all shadow-lg shadow-indigo-600/20"
         >
           <MessageSquarePlus className="w-4 h-4" />
           <span>Create New Session</span>
@@ -160,23 +66,26 @@ export const WorkbenchPage: React.FC = () => {
   }
 
   return (
-    <div className="flex-1 flex flex-col h-[calc(100vh-4rem)] bg-background">
-      {/* Session Title Header */}
-      <div className="px-6 py-3 border-b border-border/60 bg-muted/10 flex items-center justify-between">
+    <div className="flex-1 h-[calc(100vh-4rem)] flex flex-col glass-panel overflow-hidden">
+      {/* Session Header */}
+      <div className="p-4 border-b border-border/60 flex items-center justify-between bg-muted/20">
         <div>
-          <h2 className="font-semibold text-sm">{currentSessionMeta?.title || 'Resolution Workspace'}</h2>
-          <p className="text-xs text-muted-foreground">Session ID: {activeChatSessionId}</p>
+          <h2 className="font-semibold text-foreground text-sm">
+            {currentSessionMeta?.title || 'Resolution Chat Workspace'}
+          </h2>
+          <p className="text-xs text-muted-foreground font-mono">
+            Session ID: {activeChatSessionId}
+          </p>
         </div>
-
         {isStreaming && (
-          <div className="flex items-center space-x-2 text-xs text-blue-400">
-            <span className="w-2 h-2 rounded-full bg-blue-400 animate-ping"></span>
-            <span>Agent Processing...</span>
+          <div className="flex items-center space-x-2 text-xs font-mono text-emerald-400">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span>SSE Stream Active</span>
           </div>
         )}
       </div>
 
-      {/* Messages Scroll Area */}
+      {/* Message History */}
       <div className="flex-1 overflow-y-auto p-6 space-y-6">
         {messages.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-center space-y-3 text-muted-foreground my-12">
@@ -190,11 +99,6 @@ export const WorkbenchPage: React.FC = () => {
           </div>
         ) : (
           messages.map((msg) => <ChatMessageItem key={msg.id} message={msg} />)
-        )}
-
-        {/* Human in the Loop Interrupt Banner */}
-        {activeInterrupt && (
-          <InterruptBanner interrupt={activeInterrupt} onResume={handleResumeInterrupt} />
         )}
 
         {/* Scroll to bottom anchor */}

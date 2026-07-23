@@ -247,5 +247,70 @@ describe('chatService', () => {
     }));
     expect(result).toEqual(mockResponse);
   });
+
+  it('streams SSE events for resumeSessionMessageStream to /api/v1/chat/sessions/:id/resume', async () => {
+    const ssePayload = [
+      'event: agent.output_produced\ndata: {"kind":"agent.output_produced","output":{"parts":[{"kind":"structured_data","schema_id":"ecommerce.user_result.v1","data":{"exists":true,"user_id":1001,"email":"alex@example.com","user_name":"Alex"}}]}}\n\n',
+      'event: agent.run_completed\ndata: {"kind":"agent.run_completed"}\n\n',
+    ].join('');
+
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode(ssePayload));
+        controller.close();
+      },
+    });
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: new Headers({ 'content-type': 'text/event-stream' }),
+        body: stream,
+      })
+    );
+
+    const onMessage = vi.fn();
+    const onError = vi.fn();
+    const onClose = vi.fn();
+
+    await chatService.resumeSessionMessageStream(
+      'cs_1001',
+      {
+        schema_id: 'human_input.get_user.v1',
+        resume_payload: { email: 'alex@example.com' },
+        chat_session_id: 'cs_1001',
+        thread_id: 'thread_1001',
+        interrupt_id: 'intr_1001',
+      },
+      onMessage,
+      onError,
+      onClose
+    );
+
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/v1/chat/sessions/cs_1001/resume',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          schema_id: 'human_input.get_user.v1',
+          resume_payload: { email: 'alex@example.com' },
+          chat_session_id: 'cs_1001',
+          thread_id: 'thread_1001',
+          interrupt_id: 'intr_1001',
+        }),
+      })
+    );
+    expect(onMessage).toHaveBeenCalledWith(
+      'agent.output_produced',
+      expect.objectContaining({
+        kind: 'agent.output_produced',
+      })
+    );
+    expect(onClose).toHaveBeenCalled();
+  });
 });
+
 

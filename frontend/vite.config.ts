@@ -166,21 +166,6 @@ function apiMockPlugin(): Plugin {
             };
             mockMessageStore[chatSessionId].push(userMsgItem);
 
-            const agentOutputText = `[Mock SSE Stream] Received message: "${content}"`;
-            const agentMsgItem = {
-              id: mockMessageStore[chatSessionId].length + 1,
-              event_id: `evt_mock_${now}_a`,
-              chat_session_id: chatSessionId,
-              thread_id: `thread_${chatSessionId}`,
-              run_id: `run_${now}`,
-              sender_type: 2, // AGENT
-              event_kind: 'agent.output_produced',
-              sequence: mockMessageStore[chatSessionId].length,
-              payload_json: JSON.stringify({ output: { parts: [{ text: agentOutputText }] } }),
-              create_ts_ms: now + 300,
-            };
-
-            // Form 2 Normal SSE Stream
             res.statusCode = 200;
             res.setHeader('Content-Type', 'text/event-stream');
             res.setHeader('Cache-Control', 'no-cache');
@@ -194,6 +179,97 @@ function apiMockPlugin(): Plugin {
                 content,
               })}\n\n`
             );
+
+            // Interrupt Triggers Map for extensible mock negotiation
+            const interruptTriggers: Record<
+              string,
+              { schema_id: string; prompt: string; input_schema: Record<string, unknown> }
+            > = {
+              getuserbyemail: {
+                schema_id: 'human_input.get_user.v1',
+                prompt: 'Please enter customer email to look up user information.',
+                input_schema: {
+                  type: 'object',
+                  properties: {
+                    email: { type: 'string', description: 'Customer email address' },
+                    llm_text: { type: 'string', description: 'Raw natural language text' },
+                  },
+                },
+              },
+              getordersbyemail: {
+                schema_id: 'human_input.get_orders.v1',
+                prompt: 'Please enter customer email to query order history.',
+                input_schema: {
+                  type: 'object',
+                  properties: {
+                    email: { type: 'string', description: 'Customer email address' },
+                    llm_text: { type: 'string', description: 'Raw natural language text' },
+                  },
+                },
+              },
+            };
+
+            const normalizedContent = content.trim().toLowerCase();
+            const matchedTrigger = interruptTriggers[normalizedContent];
+
+            if (matchedTrigger) {
+              const interruptId = `intr_mock_${normalizedContent}_${now}`;
+              setTimeout(() => {
+                res.write(
+                  `event: agent.human_input_requested\ndata: ${JSON.stringify({
+                    event_id: `evt_mock_${now}_hir`,
+                    kind: 'agent.human_input_requested',
+                    thread_id: `thread_${chatSessionId}`,
+                    run_id: `run_${now}`,
+                    sequence: 1,
+                    interrupt_id: interruptId,
+                    request: {
+                      prompt: matchedTrigger.prompt,
+                      schema_id: matchedTrigger.schema_id,
+                      input_schema: matchedTrigger.input_schema,
+                      allowed_actions: ['submit', 'cancel'],
+                    },
+                    resume_cursor: {
+                      checkpoint_id: `chk_mock_${now}`,
+                    },
+                  })}\n\n`
+                );
+
+                res.write(
+                  `event: agent.run_interrupted\ndata: ${JSON.stringify({
+                    event_id: `evt_mock_${now}_ri`,
+                    kind: 'agent.run_interrupted',
+                    thread_id: `thread_${chatSessionId}`,
+                    run_id: `run_${now}`,
+                    sequence: 2,
+                    interrupt_ids: [interruptId],
+                    schema_id: matchedTrigger.schema_id,
+                    request: {
+                      prompt: matchedTrigger.prompt,
+                      schema_id: matchedTrigger.schema_id,
+                      input_schema: matchedTrigger.input_schema,
+                      allowed_actions: ['submit', 'cancel'],
+                    },
+                  })}\n\n`
+                );
+                res.end();
+              }, 200);
+              return;
+            }
+
+            const agentOutputText = `[Mock SSE Stream] Received message: "${content}"`;
+            const agentMsgItem = {
+              id: mockMessageStore[chatSessionId].length + 1,
+              event_id: `evt_mock_${now}_a`,
+              chat_session_id: chatSessionId,
+              thread_id: `thread_${chatSessionId}`,
+              run_id: `run_${now}`,
+              sender_type: 2, // AGENT
+              event_kind: 'agent.output_produced',
+              sequence: mockMessageStore[chatSessionId].length,
+              payload_json: JSON.stringify({ output: { parts: [{ text: agentOutputText }] } }),
+              create_ts_ms: now + 300,
+            };
 
             setTimeout(() => {
               mockMessageStore[chatSessionId].push(agentMsgItem);
@@ -215,6 +291,144 @@ function apiMockPlugin(): Plugin {
               );
               res.end();
             }, 300);
+          });
+          return;
+        }
+
+        // Mock POST /api/v1/chat/sessions/:chat_session_id/resume
+        if (/\/api\/v1\/chat\/sessions\/[^/]+\/resume/.test(url) && req.method === 'POST') {
+          let body = '';
+          req.on('data', (chunk) => {
+            body += chunk;
+          });
+
+          req.on('end', () => {
+            let resumeReq: {
+              schema_id?: string;
+              resume_payload?: Record<string, unknown>;
+              chat_session_id?: string;
+              thread_id?: string;
+              interrupt_id?: string;
+            } = {};
+
+            try {
+              resumeReq = JSON.parse(body);
+            } catch {
+              // fallback
+            }
+
+            const match = url.match(/\/api\/v1\/chat\/sessions\/([^/]+)\/resume/);
+            const chatSessionId = match ? match[1] : 'cs_mock_default';
+            const now = Date.now();
+            const schemaId = resumeReq.schema_id || 'human_input.get_user.v1';
+            const resumePayload = resumeReq.resume_payload || {};
+
+            // Extract email from email property or llm_text
+            let emailVal = String(resumePayload.email || '');
+            if (!emailVal && resumePayload.llm_text) {
+              const text = String(resumePayload.llm_text);
+              const emailMatch = text.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
+              emailVal = emailMatch ? emailMatch[0] : text;
+            }
+            if (!emailVal) {
+              emailVal = 'customer@example.com';
+            }
+
+            res.statusCode = 200;
+            res.setHeader('Content-Type', 'text/event-stream');
+            res.setHeader('Cache-Control', 'no-cache');
+            res.setHeader('Connection', 'keep-alive');
+            res.setHeader('X-Accel-Buffering', 'no');
+
+            if (schemaId === 'human_input.get_orders.v1') {
+              const textMessage = `Successfully queried orders for customer (${emailVal}).`;
+              const ordersData = {
+                customer_email: emailVal,
+                orders: [
+                  {
+                    order_id: 88412,
+                    user_id: 1001,
+                    email: emailVal,
+                    status: 1, // PAID
+                    total_amount: 199.99,
+                    created_ts: 1700000000,
+                  },
+                  {
+                    order_id: 88413,
+                    user_id: 1001,
+                    email: emailVal,
+                    status: 3, // COMPLETED
+                    total_amount: 89.5,
+                    created_ts: 1699500000,
+                  },
+                ],
+              };
+
+              setTimeout(() => {
+                res.write(
+                  `event: agent.output_produced\ndata: ${JSON.stringify({
+                    event_id: `evt_mock_${now}_out`,
+                    kind: 'agent.output_produced',
+                    output: {
+                      output_id: `out_mock_${now}`,
+                      parts: [
+                        { kind: 'text', text: textMessage },
+                        {
+                          kind: 'structured_data',
+                          schema_id: 'ecommerce.orders_result.v1',
+                          data: ordersData,
+                        },
+                      ],
+                    },
+                  })}\n\n`
+                );
+
+                res.write(
+                  `event: agent.run_completed\ndata: ${JSON.stringify({
+                    event_id: `evt_mock_${now}_rc`,
+                    kind: 'agent.run_completed',
+                  })}\n\n`
+                );
+                res.end();
+              }, 300);
+            } else {
+              // Default to get_user response
+              const textMessage = `Successfully retrieved user information for customer (${emailVal}).`;
+              const userData = {
+                exists: true,
+                user_id: 1001,
+                email: emailVal,
+                user_name: 'Alex Customer',
+              };
+
+              setTimeout(() => {
+                res.write(
+                  `event: agent.output_produced\ndata: ${JSON.stringify({
+                    event_id: `evt_mock_${now}_out`,
+                    kind: 'agent.output_produced',
+                    output: {
+                      output_id: `out_mock_${now}`,
+                      parts: [
+                        { kind: 'text', text: textMessage },
+                        {
+                          kind: 'structured_data',
+                          schema_id: 'ecommerce.user_result.v1',
+                          data: userData,
+                        },
+                      ],
+                    },
+                  })}\n\n`
+                );
+
+                res.write(
+                  `event: agent.run_completed\ndata: ${JSON.stringify({
+                    event_id: `evt_mock_${now}_rc`,
+                    kind: 'agent.run_completed',
+                  })}\n\n`
+                );
+                res.end();
+              }, 300);
+            }
           });
           return;
         }
