@@ -29,7 +29,7 @@ export const App: React.FC = () => {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <div className={`min-h-screen flex flex-col ${darkMode ? 'dark' : 'light'}`}>
+      <div className={`h-screen max-h-screen flex flex-col overflow-hidden ${darkMode ? 'dark' : 'light'}`}>
         <Header darkMode={darkMode} onToggleTheme={toggleTheme} />
         
         <div className="flex-1 flex overflow-hidden relative">

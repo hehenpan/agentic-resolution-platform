@@ -8,6 +8,7 @@ import type {
   ChatSessionListResponse,
   ChatMessageListResponse,
   SendChatMessageRequest,
+  ResumeChatMessageRequest,
 } from '../types/chat';
 
 export const chatService = {
@@ -89,6 +90,69 @@ export const chatService = {
           }
         } catch {
           // Fallback to HTTP status message if body parsing fails
+        }
+        throw new Error(errorMessage);
+      },
+      onmessage(ev) {
+        let parsedData: Record<string, unknown> = {};
+        if (ev.data) {
+          try {
+            parsedData = JSON.parse(ev.data);
+          } catch {
+            parsedData = { raw: ev.data };
+          }
+        }
+        onMessage(ev.event || 'message', parsedData);
+      },
+      onerror(err) {
+        if (onError) {
+          onError(err instanceof Error ? err : new Error(String(err)));
+        }
+        throw err;
+      },
+      onclose() {
+        if (onClose) {
+          onClose();
+        }
+      },
+    });
+  },
+
+  /**
+   * Resume an interrupted chat session turn and stream response via SSE
+   * (POST /api/v1/chat/sessions/{chat_session_id}/resume)
+   */
+  async resumeSessionMessageStream(
+    chatSessionId: string,
+    resumeReq: ResumeChatMessageRequest,
+    onMessage: (event: string, data: Record<string, unknown>) => void,
+    onError?: (err: Error) => void,
+    onClose?: () => void,
+    signal?: AbortSignal
+  ) {
+    await fetchEventSource(`/api/v1/chat/sessions/${chatSessionId}/resume`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(resumeReq),
+      signal,
+      async onopen(response) {
+        const contentType = response.headers.get('content-type') || '';
+        if (response.ok && contentType.includes('text/event-stream')) {
+          return;
+        }
+
+        let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+        try {
+          const errorJson = await response.json();
+          if (errorJson && typeof errorJson.detail === 'string') {
+            errorMessage = errorJson.detail;
+          } else if (errorJson && typeof errorJson.message === 'string') {
+            errorMessage = errorJson.message;
+          }
+        } catch {
+          // Fallback to HTTP status message
         }
         throw new Error(errorMessage);
       },
