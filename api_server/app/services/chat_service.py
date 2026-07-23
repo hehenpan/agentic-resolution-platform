@@ -21,7 +21,7 @@ from ai_agent_sdk import AgentAssistantId
 from microservice_client.ai_agent_client import AIAgentServerInterface
 from shared_common.schemas.ai_agent import (
     AgentCreateRunRequest,
-    AgentTurnRequest,
+    AgentJoinStreamRequest,
     AgentResumeRequest,
     HumanInputResponse,
     AgentResumeCursor,
@@ -129,7 +129,7 @@ class ChatService:
         if latest_thread:
             return latest_thread.thread_id
 
-        new_thread_id = f"thread_{generate_uuid_hex()}"
+        new_thread_id = str(uuid.uuid4())
         self.wrapper.create_chat_thread(
             thread_id=new_thread_id,
             chat_session_id=chat_session_id,
@@ -152,8 +152,8 @@ class ChatService:
         Execute pre-stream validation and initialization steps (steps 1-4):
         1. Verify chat session ownership and status.
         2. Resolve or create thread_id.
-        3. Create run_id via ai_agent_client and record ThreadRun.
-        4. Save user message to ChatMessage table.
+        3. Create a run with the user message as its initial graph input.
+        4. Atomically persist the ThreadRun mapping and user ChatMessage.
         Returns explicit PrepareTurnResult object without raising HTTP exceptions.
         """
         # 1. Verify session exists and belongs to current user
@@ -179,11 +179,12 @@ class ChatService:
             user_id=current_user.user_id,
         )
 
-        # 3. Create run_id using ai_agent_sdk
+        # 3. Create the run and submit the user message as its initial graph input
         try:
             create_run_req = AgentCreateRunRequest(
                 thread_id=thread_id,
                 assistant_id=AgentAssistantId.SUPERVISOR,
+                message=UserMessageInput(content=message_content),
             )
             run_res = await ai_agent_client.create_run(create_run_req)
             run_id = run_res.run_id
@@ -197,14 +198,7 @@ class ChatService:
                 error_message=f"Failed to initialize agent run: {e}",
             )
 
-        # Record ThreadRun into DB
-        self.wrapper.create_thread_run(
-            run_id=run_id,
-            thread_id=thread_id,
-            chat_session_id=chat_session_id,
-        )
-
-        # 4. Save user message to ChatMessage table
+        # 4. Atomically persist the run mapping and initiating user message
         user_evt_id = f"evt_{generate_uuid_hex()}"
         user_payload = ChatEventProjector.project_user_message(
             content=message_content,
@@ -221,10 +215,21 @@ class ChatService:
             create_ts_ms=time.time() * 1000,
         )
         try:
-            self.wrapper.save_chat_message(user_msg)
+            self.wrapper.save_turn_start(
+                run_id=run_id,
+                thread_id=thread_id,
+                chat_session_id=chat_session_id,
+                user_message=user_msg,
+            )
         except Exception as e:
-            logger.error(
-                f"Failed to save user message: event_id={user_evt_id}, error={e}"
+            logger.exception(
+                f"Agent run was created but local turn persistence failed: "
+                f"chat_session_id={chat_session_id}, thread_id={thread_id}, "
+                f"run_id={run_id}, event_id={user_evt_id}, error={e}"
+            )
+            return PrepareTurnResult(
+                is_success=False,
+                error_message=f"Failed to persist initialized agent run: {e}",
             )
 
         return PrepareTurnResult(
@@ -238,22 +243,18 @@ class ChatService:
         chat_session_id: str,
         thread_id: str,
         run_id: str,
-        message_content: str,
         ai_agent_client: AIAgentServerInterface,
     ) -> AsyncIterator[str]:
         """
-        Stream agent execution events as Server-Sent Events (SSE) (step 5).
+        Join the previously started run and stream its events as SSE (step 5).
         """
-        turn_req = AgentTurnRequest(
+        join_req = AgentJoinStreamRequest(
             thread_id=thread_id,
             run_id=run_id,
-            message=UserMessageInput(
-                content=message_content,
-            ),
         )
 
         try:
-            domain_event_stream = ai_agent_client.stream_turn(turn_req)
+            domain_event_stream = ai_agent_client.join_stream(join_req)
             async for event in domain_event_stream:
                 # Classify sender_type
                 sender_type = ChatMessageSenderType.AGENT
@@ -546,10 +547,6 @@ class ChatService:
                 data={"detail": f"Stream resume error: {e}"},
             )
             yield err_event.to_sse_format()
-
-
-
-
 
 
 

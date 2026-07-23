@@ -107,7 +107,6 @@ class AIAgentServerLangGraph(AIAgentServerInterface):
     ) -> AsyncIterator[AgentDomainEvent]:
         return self.run_stream.stream_turn(request)
 
-
     def resume_turn(
         self,
         request: AgentResumeRequest,
@@ -135,4 +134,3 @@ class AIAgentServerLangGraph(AIAgentServerInterface):
 
 def get_ai_agent_server_client() -> AIAgentServerInterface:
     return AIAgentServerLangGraph()
-

@@ -5,19 +5,46 @@ import { getCookie, setCookie, removeCookie } from '../utils/cookie';
 
 const SESSION_COOKIE_NAME = 'sessionid';
 const DEFAULT_MOCK_TENANT_ID = 1;
+const LOCAL_STORAGE_EMAIL_KEY = 'auth_user_email';
+const LOCAL_STORAGE_TENANT_KEY = 'auth_tenant_id';
+
+function getStoredUser(): { userEmail: string | null; tenantId: number | null } {
+  if (typeof window === 'undefined') return { userEmail: null, tenantId: null };
+  const email = localStorage.getItem(LOCAL_STORAGE_EMAIL_KEY);
+  const tenantStr = localStorage.getItem(LOCAL_STORAGE_TENANT_KEY);
+  const tenantId = tenantStr ? Number(tenantStr) : null;
+  return { userEmail: email, tenantId };
+}
+
+function setStoredUser(email: string, tenantId: number): void {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(LOCAL_STORAGE_EMAIL_KEY, email);
+  localStorage.setItem(LOCAL_STORAGE_TENANT_KEY, String(tenantId));
+}
+
+function clearStoredUser(): void {
+  if (typeof window === 'undefined') return;
+  localStorage.removeItem(LOCAL_STORAGE_EMAIL_KEY);
+  localStorage.removeItem(LOCAL_STORAGE_TENANT_KEY);
+}
+
+const initialUser = getStoredUser();
+const initialAuth = !!initialUser.userEmail || !!getCookie(SESSION_COOKIE_NAME);
 
 export const useAuthStore = create<AuthState>((set) => ({
-  isAuthenticated: !!getCookie(SESSION_COOKIE_NAME),
-  userEmail: null,
-  tenantId: getCookie(SESSION_COOKIE_NAME) ? DEFAULT_MOCK_TENANT_ID : null,
+  isAuthenticated: initialAuth,
+  userEmail: initialUser.userEmail,
+  tenantId: initialAuth ? (initialUser.tenantId ?? DEFAULT_MOCK_TENANT_ID) : null,
   isLoading: false,
   error: null,
 
   checkAuth: () => {
-    const hasSession = !!getCookie(SESSION_COOKIE_NAME);
+    const user = getStoredUser();
+    const hasSession = !!user.userEmail || !!getCookie(SESSION_COOKIE_NAME);
     set({
       isAuthenticated: hasSession,
-      tenantId: hasSession ? DEFAULT_MOCK_TENANT_ID : null,
+      userEmail: user.userEmail,
+      tenantId: hasSession ? (user.tenantId ?? DEFAULT_MOCK_TENANT_ID) : null,
     });
     return hasSession;
   },
@@ -28,11 +55,13 @@ export const useAuthStore = create<AuthState>((set) => ({
     try {
       const res = await authService.login(credentials);
       if (res.code === 0) {
+        const tenantId = res.data?.tenant_id ?? DEFAULT_MOCK_TENANT_ID;
         setCookie(SESSION_COOKIE_NAME, `session_${Date.now()}`);
+        setStoredUser(credentials.email, tenantId);
         set({
           isAuthenticated: true,
           userEmail: credentials.email,
-          tenantId: res.data?.tenant_id ?? DEFAULT_MOCK_TENANT_ID,
+          tenantId,
           isLoading: false,
           error: null,
         });
@@ -48,6 +77,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       // In mock / offline / dev mode, fallback to successful login if mock server passes
       if (import.meta.env.VITE_MOCK === 'true' || process.env.NODE_ENV === 'test') {
         setCookie(SESSION_COOKIE_NAME, `mock_session_${Date.now()}`);
+        setStoredUser(credentials.email, DEFAULT_MOCK_TENANT_ID);
         set({
           isAuthenticated: true,
           userEmail: credentials.email,
@@ -71,6 +101,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   logout: async (): Promise<void> => {
     await authService.logout();
     removeCookie(SESSION_COOKIE_NAME);
+    clearStoredUser();
     set({
       isAuthenticated: false,
       userEmail: null,

@@ -73,6 +73,14 @@ class FakeThreadsClient:
         self.state = state
         self.calls: list[tuple[str, bool]] = []
 
+    async def create(
+        self,
+        thread_id: str | None = None,
+        if_exists: str | None = None,
+        **kwargs: object,
+    ) -> dict[str, object]:
+        return {"thread_id": thread_id or "thread-created"}
+
     async def get_state(
         self,
         thread_id: str,
@@ -313,6 +321,20 @@ async def test_create_run_and_join_stream_and_get_state_events() -> None:
     create_res = await stream.create_run(create_req)
     assert create_res.run_id == "run-test-123"
     assert create_res.thread_id == "thread-reconnect"
+    create_call = client.runs.calls[0]
+    assert create_call["thread_id"] == "thread-reconnect"
+    assert create_call["assistant_id"] == "supervisor_graph"
+    create_input = create_call["input"]
+    assert isinstance(create_input, BaseModel)
+    assert create_input.model_dump() == {
+        "messages": [
+            {
+                "role": "user",
+                "content": "Hello",
+                "additional_kwargs": {},
+            }
+        ]
+    }
 
     # Test join_stream
     join_req = AgentJoinStreamRequest(
@@ -348,5 +370,4 @@ async def test_list_runs() -> None:
     assert res.runs[0].thread_id == "thread-list-test"
     assert res.runs[0].status == "pending"
     assert res.runs[0].metadata == {"foo": "bar"}
-
 

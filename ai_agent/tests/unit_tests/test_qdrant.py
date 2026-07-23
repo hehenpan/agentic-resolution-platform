@@ -1,21 +1,25 @@
-from agent.core.qdrant import get_qdrant_client
+import pytest
+from agent.core.qdrant import get_async_qdrant_client
 from qdrant_client.models import Distance, VectorParams, PointStruct
 
-def test_qdrant_client_memory_mode():
-    client = get_qdrant_client()
+pytestmark = pytest.mark.anyio
+
+
+async def test_qdrant_client_memory_mode():
+    client = await get_async_qdrant_client()
     
     # 1. Check client exists
     assert client is not None
     
     # 2. Check collection creation
     collection_name = "test_collection"
-    client.create_collection(
+    await client.create_collection(
         collection_name=collection_name,
         vectors_config=VectorParams(size=4, distance=Distance.COSINE),
     )
     
     # 3. Insert a mock point
-    client.upsert(
+    await client.upsert(
         collection_name=collection_name,
         points=[
             PointStruct(id=1, vector=[1.0, 0.0, 0.0, 0.0], payload={"meta": "info"})
@@ -23,7 +27,7 @@ def test_qdrant_client_memory_mode():
     )
     
     # 4. Search
-    results = client.query_points(
+    results = await client.query_points(
         collection_name=collection_name,
         query=[1.0, 0.0, 0.0, 0.0],
         limit=1

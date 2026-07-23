@@ -441,3 +441,29 @@ def test_metadata_and_checkpoint_events_update_internal_context_only() -> None:
         )
         == []
     )
+
+
+def test_stream_part_object_compatibility() -> None:
+    class FakeStreamPart:
+        def __init__(self, event: str, data: object):
+            self.event = event
+            self.data = data
+
+    projector = AgentRunProjector(thread_id=THREAD_ID, clock=lambda: CREATED_AT)
+    metadata_part = FakeStreamPart("metadata", {"run_id": "run-123"})
+    values_part = FakeStreamPart(
+        "values",
+        {
+            "outputs": [
+                {
+                    "output_id": "out-1",
+                    "parts": [{"kind": "text", "text": "StreamPart response"}],
+                }
+            ]
+        },
+    )
+
+    assert projector.process(metadata_part) == []
+    events = projector.process(values_part)
+    assert len(events) == 1
+    assert events[0].kind == "agent.output_produced"

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Bot, User, Wrench, CheckCircle2 } from 'lucide-react';
+import { Bot, User, Wrench, CheckCircle2, AlertCircle } from 'lucide-react';
 import type {
   ChatMessage,
   ECommerceUserOutput,
@@ -28,6 +28,7 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({ message }) => 
   const { activeChatSessionId, resumeSessionMessageStream } = useChatStore();
 
   const isUser = message.role === 'user';
+  const isError = message.status === 'error';
   const userName = userEmail || 'Customer Support';
 
   const handleInterruptSubmit = (payload: Record<string, unknown>, displayContent?: string) => {
@@ -40,7 +41,9 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({ message }) => 
     <div className={`flex space-x-3 max-w-4xl ${isUser ? 'ml-auto flex-row-reverse space-x-reverse' : ''}`}>
       <div
         className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 shadow-md ${
-          isUser
+          isError
+            ? 'bg-red-500/20 text-red-400 border border-red-500/40'
+            : isUser
             ? 'bg-blue-600 text-white'
             : 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/30'
         }`}
@@ -52,6 +55,7 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({ message }) => 
         <div className={`flex items-center space-x-2 text-xs text-muted-foreground mb-1 ${isUser ? 'justify-end' : ''}`}>
           {isUser ? (
             <>
+              {isError && <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />}
               <span>{new Date(message.timestamp).toLocaleTimeString()}</span>
               <span>•</span>
               <span className="font-semibold text-foreground">{userName}</span>
@@ -61,18 +65,29 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({ message }) => 
               <span className="font-semibold text-foreground">Agent Assistant</span>
               <span>•</span>
               <span>{new Date(message.timestamp).toLocaleTimeString()}</span>
+              {isError && <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />}
             </>
           )}
         </div>
 
         <div
           className={`inline-block p-4 rounded-2xl text-sm leading-relaxed ${
-            isUser
+            isError
+              ? 'bg-red-500/10 border border-red-500/40 text-foreground rounded-2xl'
+              : isUser
               ? 'bg-blue-600 text-white rounded-tr-none shadow-lg shadow-blue-500/10'
               : 'glass-panel text-foreground rounded-tl-none border border-border'
           }`}
         >
           {message.content && <div className="whitespace-pre-wrap">{message.content}</div>}
+
+          {/* Render Error Alert Warning */}
+          {isError && (
+            <div className="flex items-center space-x-1.5 text-red-400 mt-2 pt-2 border-t border-red-500/20 text-xs font-medium">
+              <AlertCircle className="w-4 h-4 text-red-500 shrink-0 inline-block" />
+              <span>Failed to send or process message</span>
+            </div>
+          )}
 
           {/* Render Human Input Interrupt Tab Card */}
           {!isUser && message.humanInputRequest && (

@@ -16,7 +16,7 @@ async def test_vector_db_search_uses_prebuilt_policy_data(
 ) -> None:
     query_vector = await get_embedding_model().aembed_query(POLICY_QUESTION)
 
-    results = get_vector_db().search(
+    results = await get_vector_db().search(
         collection_name=QDRANT_COLLECTION_RAG,
         query_vector=query_vector,
         limit=1,

@@ -59,12 +59,26 @@ services:
       - ../data/staging/ai_agent:/app/data
     environment:
       - APP_ENV=staging
+      - AI_AGENT_LOG_DIR=/var/log/ai_agent
+      - LOG_LEVEL=WARNING
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
       - TAVILY_API_KEY=${TAVILY_API_KEY}
       - POSTGRES_URI=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
     depends_on:
       - mcp_server
       - postgres
+      - qdrant
+    networks:
+      - platform-network
+
+  qdrant:
+    image: qdrant/qdrant:v1.18.0
+    container_name: platform_qdrant_staging
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - ../data/staging/qdrant:/qdrant/storage
     networks:
       - platform-network
 

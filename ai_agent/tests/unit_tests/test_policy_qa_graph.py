@@ -40,7 +40,7 @@ class FakeEmbeddingModel:
 
 
 class EmptyVectorDB:
-    def search(
+    async def search(
         self,
         collection_name: str,
         query_vector: list[float],

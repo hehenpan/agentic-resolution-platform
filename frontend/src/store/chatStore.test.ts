@@ -85,18 +85,6 @@ describe('chatStore', () => {
   it('fetchSessionMessages maps history items into ChatMessage state', async () => {
     const mockItems = [
       {
-        id: 1,
-        event_id: 'evt_101',
-        chat_session_id: 'cs_101',
-        thread_id: 'thread_1',
-        run_id: 'run_1',
-        sender_type: 1,
-        event_kind: 'user_message',
-        sequence: 0,
-        payload_json: JSON.stringify({ content: 'User question' }),
-        create_ts_ms: 1753236000000,
-      },
-      {
         id: 2,
         event_id: 'evt_102',
         chat_session_id: 'cs_101',
@@ -107,6 +95,18 @@ describe('chatStore', () => {
         sequence: 1,
         payload_json: JSON.stringify({ output: { parts: [{ text: 'Agent response' }] } }),
         create_ts_ms: 1753236001000,
+      },
+      {
+        id: 1,
+        event_id: 'evt_101',
+        chat_session_id: 'cs_101',
+        thread_id: 'thread_1',
+        run_id: 'run_1',
+        sender_type: 1,
+        event_kind: 'user_message',
+        sequence: 0,
+        payload_json: JSON.stringify({ content: 'User question' }),
+        create_ts_ms: 1753236000000,
       },
     ];
 
