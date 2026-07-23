@@ -1,13 +1,25 @@
 # Makefile for Multi-Environment Agentic Platform Docker Compose Orchestration
 
-.PHONY: staging-up staging-down prod-up prod-down
+.PHONY: stage-build stage-start stage-stop stage-down staging-up staging-down prod-up prod-down
 
-staging-up:
-	docker compose -f deploy/docker-compose.staging.yml --env-file deploy/env/.env.staging up --build
+# Staging commands
+stage-build:
+	docker compose -f deploy/docker-compose.staging.yml --env-file deploy/env/.env.staging build
 
-staging-down:
-	docker compose -f deploy/docker-compose.staging.yml down
+stage-start:
+	docker compose -f deploy/docker-compose.staging.yml --env-file deploy/env/.env.staging up
 
+stage-stop:
+	docker compose -f deploy/docker-compose.staging.yml stop
+
+stage-down:
+	docker compose -f deploy/docker-compose.staging.yml down --rmi all
+
+# Aliases for backward compatibility
+staging-up: stage-start
+staging-down: stage-stop
+
+# Production commands
 prod-up:
 	docker compose -f deploy/docker-compose.prod.yml --env-file deploy/env/.env.prod up -d --build
 

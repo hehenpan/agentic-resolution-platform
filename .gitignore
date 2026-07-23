@@ -254,3 +254,9 @@ ai_agent/data/*
 #agent plan
 plan
 plan/*
+
+#data
+data/
+data/*
+deploy/data
+deploy/data/*

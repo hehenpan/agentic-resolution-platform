@@ -3,6 +3,8 @@ from langgraph.checkpoint.base import Checkpoint, CheckpointMetadata, Checkpoint
 from langchain_core.runnables import RunnableConfig
 from typing import Any, AsyncIterator, Optional, Union
 import os
+from agent.core.config import settings
+
 class LazyAsyncSqliteSaver(BaseCheckpointSaver):
     """
     A lazy-loading AsyncSqliteSaver wrapper to prevent 'no running event loop' 
@@ -39,9 +41,9 @@ class LazyAsyncSqliteSaver(BaseCheckpointSaver):
 
 def get_checkpointer(db_file: str) -> Optional[BaseCheckpointSaver]:
     """
-    Get the checkpointer. Returns None if running inside LangGraph API environment
-    to avoid custom checkpointer errors, otherwise returns LazyAsyncSqliteSaver.
+    Get the checkpointer. Returns None in non-dev environments (e.g. staging, prod)
+    to let the platform handle persistence via PostgreSQL, otherwise returns LazyAsyncSqliteSaver.
     """
-    if os.getenv("LANGGRAPH_API_VERSION") or os.getenv("LANGGRAPH_PORT") or any(k.startswith("LANGGRAPH") for k in os.environ):
+    if settings.APP_ENV in ("staging", "prod"):
         return None
     return LazyAsyncSqliteSaver(db_file)
