@@ -10,6 +10,8 @@ import type {
 import { chatService } from '../services/chatService';
 
 const AGENT_RUN_COMPLETED_KIND = 'agent.run_completed';
+const AGENT_RUN_FAILED_KIND = 'agent.run_failed';
+const AGENT_RUN_INTERRUPTED_KIND = 'agent.run_interrupted';
 const ASSISTANT_RESPONSE_TIMEOUT_MS = 60_000;
 const ASSISTANT_RESPONSE_TIMEOUT_MESSAGE =
   'Agent response timed out. Please try again.';
@@ -32,11 +34,20 @@ const getPayloadKind = (payload: unknown): string | null => {
 };
 
 const shouldDisplayHistoryItem = (item: ChatMessageItem): boolean => {
-  if (item.event_kind === AGENT_RUN_COMPLETED_KIND) {
+  if (
+    item.event_kind === AGENT_RUN_COMPLETED_KIND ||
+    item.event_kind === AGENT_RUN_FAILED_KIND ||
+    item.event_kind === AGENT_RUN_INTERRUPTED_KIND
+  ) {
     return false;
   }
 
-  return getPayloadKind(parsePayloadJson(item.payload_json)) !== AGENT_RUN_COMPLETED_KIND;
+  const payloadKind = getPayloadKind(parsePayloadJson(item.payload_json));
+  return (
+    payloadKind !== AGENT_RUN_COMPLETED_KIND &&
+    payloadKind !== AGENT_RUN_FAILED_KIND &&
+    payloadKind !== AGENT_RUN_INTERRUPTED_KIND
+  );
 };
 
 const getFirstOutputText = (payload: unknown): string | null => {
@@ -226,6 +237,7 @@ interface ChatStoreState {
   ) => Promise<void>;
   setActiveChatSession: (chatSessionId: string | null) => void;
   addMessage: (chatSessionId: string, message: ChatMessage) => void;
+  removeMessage: (chatSessionId: string, messageId: string) => void;
   updateMessageContent: (chatSessionId: string, messageId: string, contentDelta: string) => void;
   setMessageStatus: (chatSessionId: string, messageId: string, status: ChatMessage['status']) => void;
   replaceMessageContent: (chatSessionId: string, messageId: string, content: string) => void;
@@ -432,8 +444,8 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     const responseTimeoutId = window.setTimeout(() => {
       didTimeout = true;
       abortController.abort();
-      get().replaceMessageContent(chatSessionId, agentMsgId, ASSISTANT_RESPONSE_TIMEOUT_MESSAGE);
-      get().setMessageStatus(chatSessionId, agentMsgId, 'error');
+      get().removeMessage(chatSessionId, agentMsgId);
+      get().setMessageStatus(chatSessionId, userMsgId, 'error');
       set({ error: ASSISTANT_RESPONSE_TIMEOUT_MESSAGE, isStreaming: false });
     }, ASSISTANT_RESPONSE_TIMEOUT_MS);
 
@@ -483,6 +495,18 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
             }
             get().setMessageStatus(chatSessionId, agentMsgId, 'completed');
             set({ activeInterrupt: null, isStreaming: false });
+          } else if (event === 'agent.run_failed' || event === 'run_failed') {
+            window.clearTimeout(responseTimeoutId);
+            const errorMsg =
+              (data.error as { message?: string })?.message || 'Agent run failed';
+            const agentMessage = getMessageById(get().sessionMessages, chatSessionId, agentMsgId);
+            if (agentMessage && agentMessage.content) {
+              get().setMessageStatus(chatSessionId, agentMsgId, 'error');
+            } else {
+              get().removeMessage(chatSessionId, agentMsgId);
+              get().setMessageStatus(chatSessionId, userMsgId, 'error');
+            }
+            set({ error: errorMsg, isStreaming: false });
           } else if (event === 'agent.run_interrupted' || event === 'run_interrupted') {
             window.clearTimeout(responseTimeoutId);
             get().setMessageStatus(chatSessionId, agentMsgId, 'interrupted');
@@ -496,8 +520,8 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
           } else if (event === 'error') {
             window.clearTimeout(responseTimeoutId);
             const detailStr = (data.detail as string) || 'Stream encountered error';
+            get().removeMessage(chatSessionId, agentMsgId);
             get().setMessageStatus(chatSessionId, userMsgId, 'error');
-            get().setMessageStatus(chatSessionId, agentMsgId, 'error');
             set({ error: detailStr, isStreaming: false });
           }
         },
@@ -506,8 +530,8 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
             return;
           }
           window.clearTimeout(responseTimeoutId);
+          get().removeMessage(chatSessionId, agentMsgId);
           get().setMessageStatus(chatSessionId, userMsgId, 'error');
-          get().setMessageStatus(chatSessionId, agentMsgId, 'error');
           set({ error: err.message, isStreaming: false });
         },
         () => {
@@ -522,8 +546,8 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       }
       window.clearTimeout(responseTimeoutId);
       const errorMsg = err instanceof Error ? err.message : 'Failed to send chat message';
+      get().removeMessage(chatSessionId, agentMsgId);
       get().setMessageStatus(chatSessionId, userMsgId, 'error');
-      get().setMessageStatus(chatSessionId, agentMsgId, 'error');
       set({ error: errorMsg, isStreaming: false });
     }
   },
@@ -586,8 +610,8 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     const responseTimeoutId = window.setTimeout(() => {
       didTimeout = true;
       abortController.abort();
-      get().replaceMessageContent(chatSessionId, agentMsgId, ASSISTANT_RESPONSE_TIMEOUT_MESSAGE);
-      get().setMessageStatus(chatSessionId, agentMsgId, 'error');
+      get().removeMessage(chatSessionId, agentMsgId);
+      get().setMessageStatus(chatSessionId, userMsgId, 'error');
       set({ error: ASSISTANT_RESPONSE_TIMEOUT_MESSAGE, isStreaming: false });
     }, ASSISTANT_RESPONSE_TIMEOUT_MS);
 
@@ -623,10 +647,23 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
             }
             get().setMessageStatus(chatSessionId, agentMsgId, 'completed');
             set({ isStreaming: false });
+          } else if (event === 'agent.run_failed' || event === 'run_failed') {
+            window.clearTimeout(responseTimeoutId);
+            const errorMsg =
+              (data.error as { message?: string })?.message || 'Agent run failed';
+            const agentMessage = getMessageById(get().sessionMessages, chatSessionId, agentMsgId);
+            if (agentMessage && agentMessage.content) {
+              get().setMessageStatus(chatSessionId, agentMsgId, 'error');
+            } else {
+              get().removeMessage(chatSessionId, agentMsgId);
+              get().setMessageStatus(chatSessionId, userMsgId, 'error');
+            }
+            set({ error: errorMsg, isStreaming: false });
           } else if (event === 'error') {
             window.clearTimeout(responseTimeoutId);
             const detailStr = (data.detail as string) || 'Resume stream encountered error';
-            get().setMessageStatus(chatSessionId, agentMsgId, 'error');
+            get().removeMessage(chatSessionId, agentMsgId);
+            get().setMessageStatus(chatSessionId, userMsgId, 'error');
             set({ error: detailStr, isStreaming: false });
           }
         },
@@ -635,7 +672,8 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
             return;
           }
           window.clearTimeout(responseTimeoutId);
-          get().setMessageStatus(chatSessionId, agentMsgId, 'error');
+          get().removeMessage(chatSessionId, agentMsgId);
+          get().setMessageStatus(chatSessionId, userMsgId, 'error');
           set({ error: err.message, isStreaming: false });
         },
         () => {
@@ -650,7 +688,8 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       }
       window.clearTimeout(responseTimeoutId);
       const errorMsg = err instanceof Error ? err.message : 'Failed to resume chat message';
-      get().setMessageStatus(chatSessionId, agentMsgId, 'error');
+      get().removeMessage(chatSessionId, agentMsgId);
+      get().setMessageStatus(chatSessionId, userMsgId, 'error');
       set({ error: errorMsg, isStreaming: false });
     }
   },
@@ -666,6 +705,18 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
         sessionMessages: {
           ...state.sessionMessages,
           [chatSessionId]: appendMessageChronologically(currentMsgs, message),
+        },
+      };
+    });
+  },
+
+  removeMessage: (chatSessionId: string, messageId: string) => {
+    set((state) => {
+      const currentMsgs = state.sessionMessages[chatSessionId] || [];
+      return {
+        sessionMessages: {
+          ...state.sessionMessages,
+          [chatSessionId]: currentMsgs.filter((msg) => msg.id !== messageId),
         },
       };
     });
