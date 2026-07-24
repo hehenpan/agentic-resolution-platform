@@ -17,6 +17,8 @@ class AgentOutputKey(str, Enum):
     ECOMMERCE_RETURNS_BY_ORDER = "ecommerce.returns_by_order"
     ECOMMERCE_RETURNS_BY_CUSTOMER = "ecommerce.returns_by_customer"
     ECOMMERCE_CREATE_RETURN = "ecommerce.create_return"
+    ECOMMERCE_QUERY_FINAL_RESPONSE = "ecommerce_query.final_response"
+    ECOMMERCE_ACTION_FINAL_RESPONSE = "ecommerce_action.final_response"
 
 
 AGENT_OUTPUT_NAMESPACE = uuid5(

@@ -7,6 +7,7 @@ from langgraph.graph import END, START, StateGraph
 from agent.core.checkpoint import get_checkpointer
 from agent.core.config import settings
 from agent.supervisor.ecommerce_query.nodes import (
+    build_query_response,
     query_agent,
     retrieve_order_details,
     retrieve_orders,
@@ -30,6 +31,7 @@ class EcommerceQueryNodeNames(str, Enum):
     RETRIEVE_ORDER_DETAILS = "retrieve_order_details"
     RETRIEVE_RETURNS_BY_ORDER = "retrieve_returns_by_order"
     RETRIEVE_RETURNS_BY_CUSTOMER = "retrieve_returns_by_customer"
+    BUILD_RESPONSE = "build_query_response"
 
 
 class RouteAfterQueryRoute(str, Enum):
@@ -40,17 +42,17 @@ class RouteAfterQueryRoute(str, Enum):
     RETRIEVE_ORDER_DETAILS = "retrieve_order_details"
     RETRIEVE_RETURNS_BY_ORDER = "retrieve_returns_by_order"
     RETRIEVE_RETURNS_BY_CUSTOMER = "retrieve_returns_by_customer"
-    END = "__end__"
+    BUILD_RESPONSE = "build_query_response"
 
 
 def route_after_query(state: EcommerceQueryState) -> RouteAfterQueryRoute:
     """Route execution to specific tool nodes or terminate."""
     if not state.messages:
-        return RouteAfterQueryRoute.END
+        return RouteAfterQueryRoute.BUILD_RESPONSE
 
     last_message = state.messages[-1]
     if not hasattr(last_message, "tool_calls") or not last_message.tool_calls:
-        return RouteAfterQueryRoute.END
+        return RouteAfterQueryRoute.BUILD_RESPONSE
 
     for tool_call in last_message.tool_calls:
         name = tool_call.get("name")
@@ -65,7 +67,7 @@ def route_after_query(state: EcommerceQueryState) -> RouteAfterQueryRoute:
         if name == "get_return_requests_by_customer":
             return RouteAfterQueryRoute.RETRIEVE_RETURNS_BY_CUSTOMER
 
-    return RouteAfterQueryRoute.END
+    return RouteAfterQueryRoute.BUILD_RESPONSE
 
 
 builder = StateGraph(
@@ -88,6 +90,10 @@ builder.add_node(
     EcommerceQueryNodeNames.RETRIEVE_RETURNS_BY_CUSTOMER.value,
     retrieve_returns_by_customer,
 )
+builder.add_node(
+    EcommerceQueryNodeNames.BUILD_RESPONSE.value,
+    build_query_response,
+)
 
 builder.add_edge(START, EcommerceQueryNodeNames.QUERY_AGENT.value)
 
@@ -106,7 +112,9 @@ builder.add_conditional_edges(
         RouteAfterQueryRoute.RETRIEVE_RETURNS_BY_CUSTOMER.value: (
             EcommerceQueryNodeNames.RETRIEVE_RETURNS_BY_CUSTOMER.value
         ),
-        RouteAfterQueryRoute.END.value: END,
+        RouteAfterQueryRoute.BUILD_RESPONSE.value: (
+            EcommerceQueryNodeNames.BUILD_RESPONSE.value
+        ),
     },
 )
 
@@ -124,6 +132,7 @@ builder.add_edge(
     EcommerceQueryNodeNames.RETRIEVE_RETURNS_BY_CUSTOMER.value,
     EcommerceQueryNodeNames.QUERY_AGENT.value,
 )
+builder.add_edge(EcommerceQueryNodeNames.BUILD_RESPONSE.value, END)
 
 memory = get_checkpointer(settings.DB_FILE)
 

@@ -5,7 +5,7 @@ import pytest
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langgraph.types import Command
 from mock_ecommerce_gateway import EcommerceGatewayMock
-from shared_common.schemas.ai_agent import AgentOutput
+from shared_common.schemas.ai_agent import AgentOutput, AgentOutputPartKind
 from shared_common.schemas.ai_agent.outputs import (
     ECommerceOrderDetailsOutput,
     ECommerceOrdersOutput,
@@ -124,9 +124,11 @@ async def test_supervisor_e2e_user_query_exists(monkeypatch) -> None:
 
     # Assert correct routing and output matching
     assert result["route"] == SelectRouteRoute.ECOMMERCE_QUERY
-    assert len(result["outputs"]) == 1
+    assert len(result["outputs"]) == 2
     output = AgentOutput.model_validate(result["outputs"][0])
     assert output.parts[0].schema_id == AgentOutputSchemaId.ECOMMERCE_USER_RESULT_V1.value
+    text_output = AgentOutput.model_validate(result["outputs"][1])
+    assert text_output.parts[0].kind == AgentOutputPartKind.TEXT
     assert output.parts[0].data["user_id"] == 88
 
 
@@ -176,9 +178,11 @@ async def test_supervisor_e2e_orders_query_interrupt_and_resumes(monkeypatch) ->
     )
 
     # Verify graph executes to completion and produces orders list outputs
-    assert len(res2["outputs"]) == 1
+    assert len(res2["outputs"]) == 2
     output = AgentOutput.model_validate(res2["outputs"][0])
     assert output.parts[0].schema_id == AgentOutputSchemaId.ECOMMERCE_ORDERS_RESULT_V1.value
+    text_output = AgentOutput.model_validate(res2["outputs"][1])
+    assert text_output.parts[0].kind == AgentOutputPartKind.TEXT
     orders_output = ECommerceOrdersOutput.model_validate(output.parts[0].data)
     assert orders_output.orders[0].order_id == 555
     assert orders_output.orders[0].status == OrderStatus.PENDING.value
@@ -259,8 +263,10 @@ async def test_supervisor_e2e_user_query_non_existent(monkeypatch) -> None:
     )
 
     # Must return user output indicating not found and complete gracefully
-    assert len(result["outputs"]) == 1
+    assert len(result["outputs"]) == 2
     output = AgentOutput.model_validate(result["outputs"][0])
     assert output.parts[0].schema_id == AgentOutputSchemaId.ECOMMERCE_USER_RESULT_V1.value
+    text_output = AgentOutput.model_validate(result["outputs"][1])
+    assert text_output.parts[0].kind == AgentOutputPartKind.TEXT
     assert output.parts[0].data["exists"] is False
     assert output.parts[0].data["user_id"] is None

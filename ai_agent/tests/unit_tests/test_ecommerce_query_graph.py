@@ -5,6 +5,7 @@ import pytest
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langgraph.types import Command
 from mock_ecommerce_gateway import EcommerceGatewayMock
+from shared_common.schemas.ai_agent import AgentOutputPartKind
 from shared_common.schemas.ai_agent.human_input_schemas import (
     GetOrderDetailsByOrderIdInputModel,
     GetOrdersByEmailInputModel,
@@ -160,8 +161,9 @@ async def test_retrieve_user_success_without_interrupt(monkeypatch) -> None:
     assert state_values["user_output"].exists is True
     assert state_values["user_output"].user_id == 42
     assert state_values["user_output"].email == "test@example.com"
-    assert len(result["outputs"]) == 1
+    assert len(result["outputs"]) == 2
     assert result["outputs"][0].parts[0].schema_id == AgentOutputSchemaId.ECOMMERCE_USER_RESULT_V1.value
+    assert result["outputs"][1].parts[0].kind == AgentOutputPartKind.TEXT
 
 
 async def test_retrieve_user_triggers_interrupt_and_resumes_with_structured_data(
@@ -210,8 +212,9 @@ async def test_retrieve_user_triggers_interrupt_and_resumes_with_structured_data
     assert state_values["user_output"].exists is True
     assert state_values["user_output"].user_id == 101
     assert state_values["user_output"].email == "shopper@example.com"
-    assert len(result["outputs"]) == 1
+    assert len(result["outputs"]) == 2
     assert result["outputs"][0].parts[0].schema_id == AgentOutputSchemaId.ECOMMERCE_USER_RESULT_V1.value
+    assert result["outputs"][1].parts[0].kind == AgentOutputPartKind.TEXT
 
 
 async def test_retrieve_user_triggers_interrupt_and_resumes_with_llm_text(

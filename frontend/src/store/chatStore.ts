@@ -53,19 +53,6 @@ const getFirstOutputText = (payload: unknown): string | null => {
   return typeof firstText === 'string' ? firstText : null;
 };
 
-const getHistoryMessageContent = (item: ChatMessageItem): string => {
-  const parsed = parsePayloadJson(item.payload_json);
-  if (typeof parsed === 'string') {
-    return parsed;
-  }
-
-  if (parsed && typeof parsed === 'object' && 'content' in parsed) {
-    return String((parsed as { content: unknown }).content);
-  }
-
-  return getFirstOutputText(parsed) ?? item.payload_json;
-};
-
 const parseTimestampMs = (value: unknown): number | null => {
   if (typeof value === 'number' && Number.isFinite(value)) {
     return value > 1_000_000_000_000 ? value : value * 1000;
@@ -327,7 +314,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       const res = await chatService.listSessionMessages(chatSessionId);
       if (res.code === 0 && res.data?.items) {
         const mappedMessages: ChatMessage[] = res.data.items.filter(shouldDisplayHistoryItem).map((item) => {
-          const textContent = getHistoryMessageContent(item);
+          const parsed = parsePayloadJson(item.payload_json) as Record<string, unknown> | null;
 
           let role: ChatMessage['role'] = 'assistant';
           if (item.sender_type === 1) {
@@ -336,11 +323,52 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
             role = 'system';
           }
 
+          let textContent = '';
+          let structuredParts: WebAgentOutputPart[] | undefined = undefined;
+          let humanInputRequest: WebHumanInputRequestedData | null = null;
+
+          if (parsed && typeof parsed === 'object') {
+            const kind = (parsed.kind || item.event_kind) as string;
+
+            if (kind === 'agent.output_produced' || kind === 'output_produced') {
+              const outputUpdate = getAssistantOutputUpdate(parsed);
+              textContent = outputUpdate.contentDelta || '';
+              if (outputUpdate.structuredParts && outputUpdate.structuredParts.length > 0) {
+                structuredParts = outputUpdate.structuredParts;
+              }
+            } else if (kind === 'agent.human_input_requested' || kind === 'human_input_requested') {
+              humanInputRequest = parsed as unknown as WebHumanInputRequestedData;
+              const req = parsed.request as Record<string, unknown> | undefined;
+              textContent = (req?.prompt as string) || '';
+            } else if (kind === 'user_resume') {
+              const resume = parsed as { response_data?: Record<string, unknown> };
+              if (resume.response_data) {
+                if (resume.response_data.email) {
+                  textContent = `[Resume Form] email: ${resume.response_data.email}`;
+                } else if (resume.response_data.llm_text) {
+                  textContent = String(resume.response_data.llm_text);
+                } else {
+                  textContent = `[Resume Form] ${JSON.stringify(resume.response_data)}`;
+                }
+              } else {
+                textContent = '[Resume Form] Form submitted';
+              }
+            } else if ('content' in parsed) {
+              textContent = String(parsed.content);
+            } else {
+              textContent = getFirstOutputText(parsed) ?? item.payload_json;
+            }
+          } else {
+            textContent = item.payload_json;
+          }
+
           return {
             id: item.event_id || `msg_${item.id || Date.now()}`,
             eventId: item.event_id,
             role,
             content: textContent,
+            structuredParts,
+            humanInputRequest,
             timestamp: new Date(item.create_ts_ms).toISOString(),
             status: 'completed',
           };

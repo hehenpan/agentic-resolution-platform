@@ -9,7 +9,8 @@ logger = setup_logging()
 
 # Instantiate FastMCP server
 mcp = FastMCP(
-    name="mcp-server"
+    name="mcp-server",
+    host=settings.SERVER_HOST
 )
 
 # Initialize database schema/tables

@@ -169,7 +169,7 @@ class MCPEcommerceGateway(EcommerceGateway):
     ) -> ResponseModelT:
         result = await self._client.call_tool(
             tool_name.value,
-            arguments=request.model_dump(mode="json"),
+            arguments={"req": request.model_dump(mode="json")},
         )
         response_text = self._extract_response_text(tool_name, result)
         try:
