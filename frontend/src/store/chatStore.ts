@@ -1,6 +1,65 @@
 import { create } from 'zustand';
-import type { ChatSessionMeta, ChatMessage, InterruptEventData } from '../types/chat';
+import type {
+  ChatSessionMeta,
+  ChatMessage,
+  ChatMessageItem,
+  InterruptEventData,
+} from '../types/chat';
 import { chatService } from '../services/chatService';
+
+const AGENT_RUN_COMPLETED_KIND = 'agent.run_completed';
+
+const parsePayloadJson = (payloadJson: string): unknown => {
+  try {
+    return JSON.parse(payloadJson);
+  } catch {
+    return null;
+  }
+};
+
+const getPayloadKind = (payload: unknown): string | null => {
+  if (!payload || typeof payload !== 'object' || !('kind' in payload)) {
+    return null;
+  }
+
+  const kind = (payload as { kind?: unknown }).kind;
+  return typeof kind === 'string' ? kind : null;
+};
+
+const shouldDisplayHistoryItem = (item: ChatMessageItem): boolean => {
+  if (item.event_kind === AGENT_RUN_COMPLETED_KIND) {
+    return false;
+  }
+
+  return getPayloadKind(parsePayloadJson(item.payload_json)) !== AGENT_RUN_COMPLETED_KIND;
+};
+
+const getFirstOutputText = (payload: unknown): string | null => {
+  if (!payload || typeof payload !== 'object' || !('output' in payload)) {
+    return null;
+  }
+
+  const output = (payload as { output?: { parts?: unknown } }).output;
+  if (!Array.isArray(output?.parts)) {
+    return null;
+  }
+
+  const firstText = (output.parts[0] as { text?: unknown } | undefined)?.text;
+  return typeof firstText === 'string' ? firstText : null;
+};
+
+const getHistoryMessageContent = (item: ChatMessageItem): string => {
+  const parsed = parsePayloadJson(item.payload_json);
+  if (typeof parsed === 'string') {
+    return parsed;
+  }
+
+  if (parsed && typeof parsed === 'object' && 'content' in parsed) {
+    return String((parsed as { content: unknown }).content);
+  }
+
+  return getFirstOutputText(parsed) ?? item.payload_json;
+};
 
 interface ChatStoreState {
   sessions: ChatSessionMeta[];
@@ -104,22 +163,8 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     try {
       const res = await chatService.listSessionMessages(chatSessionId);
       if (res.code === 0 && res.data?.items) {
-        const mappedMessages: ChatMessage[] = res.data.items.map((item) => {
-          let textContent = '';
-          try {
-            const parsed = JSON.parse(item.payload_json);
-            if (typeof parsed === 'string') {
-              textContent = parsed;
-            } else if (parsed?.content) {
-              textContent = String(parsed.content);
-            } else if (parsed?.output?.parts?.[0]?.text) {
-              textContent = String(parsed.output.parts[0].text);
-            } else {
-              textContent = item.payload_json;
-            }
-          } catch {
-            textContent = item.payload_json;
-          }
+        const mappedMessages: ChatMessage[] = res.data.items.filter(shouldDisplayHistoryItem).map((item) => {
+          const textContent = getHistoryMessageContent(item);
 
           let role: ChatMessage['role'] = 'assistant';
           if (item.sender_type === 1) {

@@ -15,7 +15,6 @@ from shared_common.schemas.ai_agent import (
     HumanInputSchemaId,
     HumanInputRequested,
     StructuredDataPart,
-    TextPart,
 )
 
 from ai_agent_sdk.agent_run_projector import (
@@ -68,7 +67,7 @@ def test_process_discards_unhandled_stream_events(event_type: str) -> None:
 
 
 def test_process_can_produce_one_or_multiple_events() -> None:
-    one = _projector().process(
+    values_events = _projector().process(
         {
             "type": "values",
             "data": {"outputs": [_output(OUTPUT_ID_1, "First answer")]},
@@ -93,9 +92,8 @@ def test_process_can_produce_one_or_multiple_events() -> None:
         source_sequence=2,
     )
 
-    assert len(one) == 1
+    assert values_events == []
     assert len(multiple) == 2
-    assert isinstance(one[0], AgentOutputProduced)
     assert isinstance(multiple[0], AgentOutputProduced)
     assert isinstance(multiple[1], AgentOutputProduced)
     assert multiple[1].output.output_id == OUTPUT_ID_2
@@ -164,8 +162,8 @@ def test_output_projection_does_not_depend_on_node_name() -> None:
 def test_duplicate_output_is_published_once_and_uses_output_id() -> None:
     projector = _projector()
     raw_event = {
-        "type": "values",
-        "data": {"outputs": [_output(OUTPUT_ID_1, "Answer")]},
+        "type": "updates",
+        "data": {"node": {"outputs": [_output(OUTPUT_ID_1, "Answer")]}},
     }
 
     first = projector.process(raw_event, source_sequence=3)
@@ -288,7 +286,7 @@ def test_invalid_progress_custom_event_is_not_published() -> None:
     assert events == []
 
 
-def test_finalize_publishes_unseen_output_without_rewriting_content() -> None:
+def test_finalize_does_not_publish_outputs_from_values_snapshot() -> None:
     projector = _projector()
     events = projector.finalize(
         {
@@ -303,12 +301,9 @@ def test_finalize_publishes_unseen_output_without_rewriting_content() -> None:
         }
     )
 
-    assert len(events) == 2
-    assert isinstance(events[0], AgentOutputProduced)
-    assert isinstance(events[0].output.parts[0], TextPart)
-    assert events[0].output.parts[0].text == "Original answer"
-    assert isinstance(events[1], AgentRunCompleted)
-    assert events[1].output_ids == [OUTPUT_ID_1]
+    assert len(events) == 1
+    assert isinstance(events[0], AgentRunCompleted)
+    assert events[0].output_ids == []
     assert projector.finalize({"values": {}, "interrupts": []}) == []
 
 
@@ -451,19 +446,21 @@ def test_stream_part_object_compatibility() -> None:
 
     projector = AgentRunProjector(thread_id=THREAD_ID, clock=lambda: CREATED_AT)
     metadata_part = FakeStreamPart("metadata", {"run_id": "run-123"})
-    values_part = FakeStreamPart(
-        "values",
+    updates_part = FakeStreamPart(
+        "updates",
         {
-            "outputs": [
-                {
-                    "output_id": "out-1",
-                    "parts": [{"kind": "text", "text": "StreamPart response"}],
-                }
-            ]
+            "node": {
+                "outputs": [
+                    {
+                        "output_id": "out-1",
+                        "parts": [{"kind": "text", "text": "StreamPart response"}],
+                    }
+                ]
+            }
         },
     )
 
     assert projector.process(metadata_part) == []
-    events = projector.process(values_part)
+    events = projector.process(updates_part)
     assert len(events) == 1
     assert events[0].kind == "agent.output_produced"

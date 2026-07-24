@@ -1,6 +1,6 @@
 """State and routing models for the supervisor graph."""
 
-import operator
+from collections.abc import Mapping
 from enum import Enum
 from typing import Annotated
 
@@ -8,6 +8,25 @@ from langchain_core.messages import AnyMessage, BaseMessage
 from langgraph.graph.message import add_messages
 from pydantic import BaseModel, Field
 from shared_common.schemas.ai_agent import AgentOutput
+
+
+def merge_agent_outputs(
+    existing: list[AgentOutput | Mapping[str, object]],
+    updates: list[AgentOutput | Mapping[str, object]],
+) -> list[AgentOutput]:
+    """Merge agent outputs idempotently while preserving first-seen order."""
+    validated_existing = [
+        AgentOutput.model_validate(output) for output in existing
+    ]
+    validated_updates = [
+        AgentOutput.model_validate(output) for output in updates
+    ]
+    merged_by_id = {
+        output.output_id: output for output in validated_existing
+    }
+    for output in validated_updates:
+        merged_by_id[output.output_id] = output
+    return list(merged_by_id.values())
 
 
 class SelectRouteRoute(str, Enum):
@@ -43,9 +62,12 @@ class SupervisorState(BaseModel):
         default_factory=list,
         description="Conversation messages accumulated by the supervisor graph.",
     )
-    outputs: Annotated[list[AgentOutput], operator.add] = Field(
+    outputs: Annotated[list[AgentOutput], merge_agent_outputs] = Field(
         default_factory=list,
-        description="Domain outputs accumulated during the supervisor run.",
+        description=(
+            "Domain outputs merged idempotently by output_id during supervisor "
+            "execution."
+        ),
     )
     route: SelectRouteRoute | None = Field(
         default=None,
@@ -66,6 +88,17 @@ class RouteRequestUpdate(BaseModel):
 
     route: SelectRouteRoute = Field(
         description="Route selected for the incoming request."
+    )
+
+
+class SupervisorSubgraphInput(BaseModel):
+    """Restrict specialist subgraph input to conversation messages."""
+
+    messages: list[BaseMessage] = Field(
+        description=(
+            "Conversation messages provided to a specialist subgraph without "
+            "inheriting parent graph outputs."
+        )
     )
 
 

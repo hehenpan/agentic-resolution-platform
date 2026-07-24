@@ -18,7 +18,7 @@ from agent.supervisor.ecommerce_query.state import (
     EcommerceQueryOutput,
     EcommerceQueryState,
 )
-from agent.supervisor.state import SupervisorGraphNames
+from agent.supervisor.state import SupervisorGraphNames, SupervisorSubgraphInput
 
 
 class EcommerceQueryNodeNames(str, Enum):
@@ -70,6 +70,7 @@ def route_after_query(state: EcommerceQueryState) -> RouteAfterQueryRoute:
 
 builder = StateGraph(
     EcommerceQueryState,
+    input_schema=SupervisorSubgraphInput,
     output_schema=EcommerceQueryOutput,
 )
 builder.add_node(EcommerceQueryNodeNames.QUERY_AGENT.value, query_agent)

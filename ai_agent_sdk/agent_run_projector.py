@@ -90,8 +90,11 @@ class AgentRunProjector:
             self._update_resume_cursor_from_checkpoint_payload(data)
             return []
 
-        if event_type in {"updates", "values"}:
+        if event_type == "updates":
             return self._publish_outputs(data, source_sequence)
+
+        if event_type == "values":
+            return []
 
         if event_type == "custom":
             return self._project_custom_event(data, source_sequence)
@@ -122,7 +125,7 @@ class AgentRunProjector:
             return []
 
         self._update_resume_cursor_from_thread_state(thread_state)
-        events = self._publish_outputs(thread_state.get("values"), None)
+        events: list[AgentDomainEvent] = []
         interrupts = self._extract_interrupts(thread_state)
 
         if interrupts:
