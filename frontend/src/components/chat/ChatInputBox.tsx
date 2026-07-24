@@ -43,6 +43,7 @@ export const ChatInputBox: React.FC<ChatInputBoxProps> = ({ onSendMessage, disab
 
         <button
           type="submit"
+          aria-label="Send message"
           disabled={!input.trim() || disabled}
           className="p-2.5 rounded-xl bg-primary text-primary-foreground disabled:opacity-40 hover:opacity-90 transition-all shadow-md shadow-blue-500/20"
         >

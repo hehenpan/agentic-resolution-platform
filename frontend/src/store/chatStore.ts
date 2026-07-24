@@ -10,6 +10,9 @@ import type {
 import { chatService } from '../services/chatService';
 
 const AGENT_RUN_COMPLETED_KIND = 'agent.run_completed';
+const ASSISTANT_RESPONSE_TIMEOUT_MS = 60_000;
+const ASSISTANT_RESPONSE_TIMEOUT_MESSAGE =
+  'Agent response timed out. Please try again.';
 
 const parsePayloadJson = (payloadJson: string): unknown => {
   try {
@@ -190,6 +193,22 @@ const getAssistantOutputUpdate = (
   return { contentDelta, structuredParts };
 };
 
+const hasVisibleAssistantUpdate = (update: AssistantStreamEventUpdate): boolean => {
+  return Boolean(
+    update.contentDelta ||
+      update.humanInputRequest ||
+      (update.structuredParts && update.structuredParts.length > 0)
+  );
+};
+
+const getMessageById = (
+  messagesBySession: Record<string, ChatMessage[]>,
+  chatSessionId: string,
+  messageId: string
+): ChatMessage | undefined => {
+  return messagesBySession[chatSessionId]?.find((message) => message.id === messageId);
+};
+
 interface AssistantStreamEventUpdate {
   eventId: string | null;
   timestamp: string;
@@ -222,6 +241,7 @@ interface ChatStoreState {
   addMessage: (chatSessionId: string, message: ChatMessage) => void;
   updateMessageContent: (chatSessionId: string, messageId: string, contentDelta: string) => void;
   setMessageStatus: (chatSessionId: string, messageId: string, status: ChatMessage['status']) => void;
+  replaceMessageContent: (chatSessionId: string, messageId: string, content: string) => void;
   setHumanInputRequest: (chatSessionId: string, messageId: string, humanInputReq: any) => void;
   addStructuredPart: (chatSessionId: string, messageId: string, part: any) => void;
   applyAssistantStreamEvent: (
@@ -368,6 +388,27 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     get().addMessage(chatSessionId, agentPlaceholder);
     set({ isStreaming: true, error: null });
 
+    const abortController = new AbortController();
+    let hasReceivedAssistantResponse = false;
+    let didTimeout = false;
+
+    const markAssistantResponseReceived = () => {
+      if (hasReceivedAssistantResponse) {
+        return;
+      }
+      hasReceivedAssistantResponse = true;
+      window.clearTimeout(responseTimeoutId);
+      set({ isStreaming: false });
+    };
+
+    const responseTimeoutId = window.setTimeout(() => {
+      didTimeout = true;
+      abortController.abort();
+      get().replaceMessageContent(chatSessionId, agentMsgId, ASSISTANT_RESPONSE_TIMEOUT_MESSAGE);
+      get().setMessageStatus(chatSessionId, agentMsgId, 'error');
+      set({ error: ASSISTANT_RESPONSE_TIMEOUT_MESSAGE, isStreaming: false });
+    }, ASSISTANT_RESPONSE_TIMEOUT_MS);
+
     try {
       await chatService.sendSessionMessageStream(
         chatSessionId,
@@ -384,6 +425,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
             if (!applied) {
               return;
             }
+            markAssistantResponseReceived();
             const interruptObj: InterruptEventData = {
               interrupt_id: reqData.interrupt_id || `int_${Date.now()}`,
               thread_id: reqData.thread_id || `thread_${chatSessionId}`,
@@ -394,18 +436,29 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
             get().setActiveInterrupt(interruptObj);
           } else if (event === 'agent.output_produced' || event === 'output_produced') {
             const outputUpdate = getAssistantOutputUpdate(data);
-            get().applyAssistantStreamEvent(chatSessionId, agentMsgId, {
+            const update = {
               eventId: getEventId(data),
               timestamp: getEventTimestamp(data),
               contentDelta: outputUpdate.contentDelta,
               structuredParts: outputUpdate.structuredParts,
               status: 'streaming',
-            });
+            } satisfies AssistantStreamEventUpdate;
+            get().applyAssistantStreamEvent(chatSessionId, agentMsgId, update);
+            if (hasVisibleAssistantUpdate(update)) {
+              markAssistantResponseReceived();
+            }
           } else if (event === 'agent.run_completed' || event === 'run_completed') {
+            window.clearTimeout(responseTimeoutId);
+            const agentMessage = getMessageById(get().sessionMessages, chatSessionId, agentMsgId);
+            if (!hasReceivedAssistantResponse && !agentMessage?.content) {
+              get().replaceMessageContent(chatSessionId, agentMsgId, 'Agent completed without a visible response.');
+            }
             get().setMessageStatus(chatSessionId, agentMsgId, 'completed');
-            set({ activeInterrupt: null });
+            set({ activeInterrupt: null, isStreaming: false });
           } else if (event === 'agent.run_interrupted' || event === 'run_interrupted') {
+            window.clearTimeout(responseTimeoutId);
             get().setMessageStatus(chatSessionId, agentMsgId, 'interrupted');
+            set({ isStreaming: false });
             if (data.interrupt_ids && Array.isArray(data.interrupt_ids) && data.interrupt_ids[0]) {
               const current = get().activeInterrupt;
               if (current) {
@@ -413,22 +466,33 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
               }
             }
           } else if (event === 'error') {
+            window.clearTimeout(responseTimeoutId);
             const detailStr = (data.detail as string) || 'Stream encountered error';
             get().setMessageStatus(chatSessionId, userMsgId, 'error');
             get().setMessageStatus(chatSessionId, agentMsgId, 'error');
-            set({ error: detailStr });
+            set({ error: detailStr, isStreaming: false });
           }
         },
         (err) => {
+          if (didTimeout) {
+            return;
+          }
+          window.clearTimeout(responseTimeoutId);
           get().setMessageStatus(chatSessionId, userMsgId, 'error');
           get().setMessageStatus(chatSessionId, agentMsgId, 'error');
           set({ error: err.message, isStreaming: false });
         },
         () => {
+          window.clearTimeout(responseTimeoutId);
           set({ isStreaming: false });
-        }
+        },
+        abortController.signal
       );
     } catch (err: unknown) {
+      if (didTimeout) {
+        return;
+      }
+      window.clearTimeout(responseTimeoutId);
       const errorMsg = err instanceof Error ? err.message : 'Failed to send chat message';
       get().setMessageStatus(chatSessionId, userMsgId, 'error');
       get().setMessageStatus(chatSessionId, agentMsgId, 'error');
@@ -478,6 +542,27 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     // Clear active interrupt once resume is initiated
     set({ activeInterrupt: null, isStreaming: true, error: null });
 
+    const abortController = new AbortController();
+    let hasReceivedAssistantResponse = false;
+    let didTimeout = false;
+
+    const markAssistantResponseReceived = () => {
+      if (hasReceivedAssistantResponse) {
+        return;
+      }
+      hasReceivedAssistantResponse = true;
+      window.clearTimeout(responseTimeoutId);
+      set({ isStreaming: false });
+    };
+
+    const responseTimeoutId = window.setTimeout(() => {
+      didTimeout = true;
+      abortController.abort();
+      get().replaceMessageContent(chatSessionId, agentMsgId, ASSISTANT_RESPONSE_TIMEOUT_MESSAGE);
+      get().setMessageStatus(chatSessionId, agentMsgId, 'error');
+      set({ error: ASSISTANT_RESPONSE_TIMEOUT_MESSAGE, isStreaming: false });
+    }, ASSISTANT_RESPONSE_TIMEOUT_MS);
+
     try {
       await chatService.resumeSessionMessageStream(
         chatSessionId,
@@ -491,30 +576,51 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
         (event, data) => {
           if (event === 'agent.output_produced' || event === 'output_produced') {
             const outputUpdate = getAssistantOutputUpdate(data);
-            get().applyAssistantStreamEvent(chatSessionId, agentMsgId, {
+            const update = {
               eventId: getEventId(data),
               timestamp: getEventTimestamp(data),
               contentDelta: outputUpdate.contentDelta,
               structuredParts: outputUpdate.structuredParts,
               status: 'streaming',
-            });
+            } satisfies AssistantStreamEventUpdate;
+            get().applyAssistantStreamEvent(chatSessionId, agentMsgId, update);
+            if (hasVisibleAssistantUpdate(update)) {
+              markAssistantResponseReceived();
+            }
           } else if (event === 'agent.run_completed' || event === 'run_completed') {
+            window.clearTimeout(responseTimeoutId);
+            const agentMessage = getMessageById(get().sessionMessages, chatSessionId, agentMsgId);
+            if (!hasReceivedAssistantResponse && !agentMessage?.content) {
+              get().replaceMessageContent(chatSessionId, agentMsgId, 'Agent completed without a visible response.');
+            }
             get().setMessageStatus(chatSessionId, agentMsgId, 'completed');
+            set({ isStreaming: false });
           } else if (event === 'error') {
+            window.clearTimeout(responseTimeoutId);
             const detailStr = (data.detail as string) || 'Resume stream encountered error';
             get().setMessageStatus(chatSessionId, agentMsgId, 'error');
-            set({ error: detailStr });
+            set({ error: detailStr, isStreaming: false });
           }
         },
         (err) => {
+          if (didTimeout) {
+            return;
+          }
+          window.clearTimeout(responseTimeoutId);
           get().setMessageStatus(chatSessionId, agentMsgId, 'error');
           set({ error: err.message, isStreaming: false });
         },
         () => {
+          window.clearTimeout(responseTimeoutId);
           set({ isStreaming: false });
-        }
+        },
+        abortController.signal
       );
     } catch (err: unknown) {
+      if (didTimeout) {
+        return;
+      }
+      window.clearTimeout(responseTimeoutId);
       const errorMsg = err instanceof Error ? err.message : 'Failed to resume chat message';
       get().setMessageStatus(chatSessionId, agentMsgId, 'error');
       set({ error: errorMsg, isStreaming: false });
@@ -545,6 +651,25 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
         return {
           ...msg,
           content: msg.content + contentDelta,
+        };
+      });
+      return {
+        sessionMessages: {
+          ...state.sessionMessages,
+          [chatSessionId]: updatedMsgs,
+        },
+      };
+    });
+  },
+
+  replaceMessageContent: (chatSessionId: string, messageId: string, content: string) => {
+    set((state) => {
+      const currentMsgs = state.sessionMessages[chatSessionId] || [];
+      const updatedMsgs = currentMsgs.map((msg) => {
+        if (msg.id !== messageId) return msg;
+        return {
+          ...msg,
+          content,
         };
       });
       return {

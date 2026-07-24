@@ -169,6 +169,60 @@ describe('chatStore', () => {
     expect(useChatStore.getState().isStreaming).toBe(false);
   });
 
+  it('sendMessageStream clears waiting state when the first visible assistant response arrives', async () => {
+    let resolveStream: () => void = () => undefined;
+
+    vi.spyOn(chatService, 'sendSessionMessageStream').mockImplementation(
+      async (_sessionId, _content, onMessage, _onError, onClose) => {
+        onMessage('agent.output_produced', {
+          output: { parts: [{ text: 'First response chunk.' }] },
+        });
+
+        await new Promise<void>((resolve) => {
+          resolveStream = resolve;
+        });
+        onMessage('agent.run_completed', { kind: 'agent.run_completed' });
+        if (onClose) onClose();
+      }
+    );
+
+    const sendPromise = useChatStore.getState().sendMessageStream('cs_101', 'Test message');
+    await Promise.resolve();
+
+    const messages = useChatStore.getState().sessionMessages['cs_101'];
+    expect(messages[1].content).toBe('First response chunk.');
+    expect(useChatStore.getState().isStreaming).toBe(false);
+
+    resolveStream();
+    await sendPromise;
+  });
+
+  it('sendMessageStream times out if no visible assistant response arrives', async () => {
+    vi.useFakeTimers();
+
+    vi.spyOn(chatService, 'sendSessionMessageStream').mockImplementation(
+      async (_sessionId, _content, _onMessage, _onError, _onClose, signal) => {
+        await new Promise<void>((resolve) => {
+          signal?.addEventListener('abort', () => resolve(), { once: true });
+        });
+      }
+    );
+
+    const sendPromise = useChatStore.getState().sendMessageStream('cs_101', 'Test message');
+    await Promise.resolve();
+
+    expect(useChatStore.getState().isStreaming).toBe(true);
+
+    vi.advanceTimersByTime(60_000);
+    await sendPromise;
+
+    const messages = useChatStore.getState().sessionMessages['cs_101'];
+    expect(messages[1].role).toBe('assistant');
+    expect(messages[1].content).toBe('Agent response timed out. Please try again.');
+    expect(messages[1].status).toBe('error');
+    expect(useChatStore.getState().isStreaming).toBe(false);
+  });
+
   it('sendMessageStream ignores repeated visible SSE events with the same event_id', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2025-07-23T10:00:00.000Z'));
@@ -319,7 +373,8 @@ describe('chatStore', () => {
       }),
       expect.any(Function),
       expect.any(Function),
-      expect.any(Function)
+      expect.any(Function),
+      expect.any(AbortSignal)
     );
   });
 });
