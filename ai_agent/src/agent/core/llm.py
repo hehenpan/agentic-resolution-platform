@@ -5,7 +5,7 @@ from typing import Any, Protocol
 from langchain_google_genai import ChatGoogleGenerativeAI
 from pydantic import BaseModel
 
-from agent.core.constants import GEMINI_CHAT_MODEL
+from agent.core.config import settings
 
 
 class AsyncInvokable(Protocol):
@@ -34,4 +34,4 @@ class ChatLLM(AsyncInvokable, Protocol):
 
 def get_llm_model() -> ChatLLM:
     """Create the configured chat model."""
-    return ChatGoogleGenerativeAI(model=GEMINI_CHAT_MODEL)
+    return ChatGoogleGenerativeAI(model=settings.LLM_CHAT_MODEL)

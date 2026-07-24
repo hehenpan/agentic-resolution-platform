@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 import pytest
 from langchain_core.messages import HumanMessage
 
-from agent.core.constants import GEMINI_CHAT_MODEL
+from agent.core.config import settings
 from agent.supervisor.nodes import route_request
 from agent.supervisor.state import SelectRouteRoute, SupervisorState
 
@@ -27,7 +27,7 @@ async def test_supervisor_real_llm_routes_policy_question() -> None:
 
     assert update["route"] == SelectRouteRoute.POLICY_QA
     record = {
-        "model": GEMINI_CHAT_MODEL,
+        "model": settings.LLM_CHAT_MODEL,
         "question": POLICY_QUESTION,
         "route": update["route"].value,
         "recorded_at": datetime.now(timezone.utc).isoformat(),

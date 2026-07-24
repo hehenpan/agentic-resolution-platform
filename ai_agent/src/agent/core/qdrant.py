@@ -1,3 +1,5 @@
+"""Qdrant client factory helpers."""
+
 import asyncio
 from functools import cache
 
@@ -8,10 +10,7 @@ from agent.core.config import settings
 
 @cache
 def _create_async_qdrant_client() -> AsyncQdrantClient:
-    """
-    Initialize and return AsyncQdrantClient based on settings.
-    Handles memory, path, or url parameters with singleton caching.
-    """
+    """Initialize and return AsyncQdrantClient based on settings."""
     if getattr(settings, "QDRANT_LOCATION", None) == ":memory:":
         return AsyncQdrantClient(location=":memory:")
     elif getattr(settings, "QDRANT_PATH", None):
@@ -23,14 +22,24 @@ def _create_async_qdrant_client() -> AsyncQdrantClient:
         return AsyncQdrantClient(url=settings.QDRANT_URL)
 
 
-async def get_async_qdrant_client() -> AsyncQdrantClient:
-    """
-    Return the configured async Qdrant client without blocking the event loop.
+def _uses_local_qdrant_storage() -> bool:
+    """Return whether client construction opens local Qdrant storage."""
+    return bool(
+        getattr(settings, "QDRANT_LOCATION", None) == ":memory:"
+        or getattr(settings, "QDRANT_PATH", None)
+    )
 
-    AsyncQdrantClient local path mode performs synchronous filesystem work while
-    opening storage, so construction is delegated to a worker thread.
+
+async def get_async_qdrant_client() -> AsyncQdrantClient:
+    """Return the configured async Qdrant client without blocking the event loop.
+
+    Remote Qdrant URL mode is constructed directly. Local path and memory modes
+    open local storage synchronously, so construction is delegated to a worker
+    thread only for those modes.
     """
-    return await asyncio.to_thread(_create_async_qdrant_client)
+    if _uses_local_qdrant_storage():
+        return await asyncio.to_thread(_create_async_qdrant_client)
+    return _create_async_qdrant_client()
 
 
 def clear_qdrant_client_cache() -> None:

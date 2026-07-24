@@ -16,7 +16,7 @@ COPY ai_agent/src /app/src
 
 # Install python package dependencies using pip
 RUN pip install --no-cache-dir -e . && \
-    pip install --no-cache-dir langgraph-cli[inmem]
+    pip install --no-cache-dir "langgraph-cli[inmem]==0.4.31"
 
 # Copy remaining code
 COPY ai_agent /app

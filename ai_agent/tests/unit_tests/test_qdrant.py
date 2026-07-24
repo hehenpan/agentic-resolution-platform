@@ -1,6 +1,8 @@
 import pytest
+from qdrant_client.models import Distance, PointStruct, VectorParams
+
+from agent.core import qdrant
 from agent.core.qdrant import get_async_qdrant_client
-from qdrant_client.models import Distance, VectorParams, PointStruct
 
 pytestmark = pytest.mark.anyio
 
@@ -36,3 +38,36 @@ async def test_qdrant_client_memory_mode():
     assert len(results.points) == 1
     assert results.points[0].id == 1
     assert results.points[0].payload == {"meta": "info"}
+
+
+async def test_qdrant_client_remote_mode_does_not_use_thread(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    sentinel = object()
+    monkeypatch.setattr(qdrant.settings, "QDRANT_LOCATION", None)
+    monkeypatch.setattr(qdrant.settings, "QDRANT_PATH", None)
+    monkeypatch.setattr(qdrant.settings, "QDRANT_URL", "http://qdrant:6333")
+    monkeypatch.setattr(qdrant, "_create_async_qdrant_client", lambda: sentinel)
+
+    async def fail_to_thread(*args, **kwargs):
+        raise AssertionError("remote Qdrant client construction should not use a thread")
+
+    monkeypatch.setattr(qdrant.asyncio, "to_thread", fail_to_thread)
+
+    assert await qdrant.get_async_qdrant_client() is sentinel
+
+
+async def test_qdrant_client_local_mode_uses_thread(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    sentinel = object()
+    monkeypatch.setattr(qdrant.settings, "QDRANT_LOCATION", None)
+    monkeypatch.setattr(qdrant.settings, "QDRANT_PATH", "qdrant_storage")
+
+    async def fake_to_thread(func, *args, **kwargs):
+        return func(*args, **kwargs)
+
+    monkeypatch.setattr(qdrant, "_create_async_qdrant_client", lambda: sentinel)
+    monkeypatch.setattr(qdrant.asyncio, "to_thread", fake_to_thread)
+
+    assert await qdrant.get_async_qdrant_client() is sentinel

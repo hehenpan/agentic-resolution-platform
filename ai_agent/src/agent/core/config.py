@@ -47,6 +47,46 @@ class Settings:
         self.QDRANT_LOCATION = self._config.get("qdrant", "location", fallback=None)
 
         # MCP configurations
-        self.MCP_SERVER_URL = self._config.get("mcp", "server_url", fallback="http://localhost:8500/sse")
+        self.MCP_SERVER_URL = self._config.get(
+            "mcp",
+            "server_url",
+            fallback="http://localhost:8500/sse",
+        )
+
+        # LLM configurations
+        self.LLM_CHAT_MODEL = self._get_required("llm", "chat_model")
+
+        # Embedding configurations
+        self.EMBEDDING_MODEL = self._get_required("embedding", "model")
+        self.EMBEDDING_DIM = self._get_required_int("embedding", "dimensionality")
+
+    def _get_required(self, section: str, option: str) -> str:
+        """Read a required string setting and log missing configuration."""
+        try:
+            return self._config.get(section, option)
+        except (configparser.NoSectionError, configparser.NoOptionError):
+            logger.exception(
+                "Required AI Agent configuration is missing: section={}, option={}",
+                section,
+                option,
+            )
+            raise
+
+    def _get_required_int(self, section: str, option: str) -> int:
+        """Read a required integer setting and log missing or invalid configuration."""
+        try:
+            return self._config.getint(section, option)
+        except (
+            configparser.NoSectionError,
+            configparser.NoOptionError,
+            ValueError,
+        ):
+            logger.exception(
+                "Required integer AI Agent configuration is invalid: section={}, option={}",
+                section,
+                option,
+            )
+            raise
+
 
 settings = Settings(CONFIG_FILE_PATH, APP_ENV)

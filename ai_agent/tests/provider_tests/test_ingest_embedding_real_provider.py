@@ -8,10 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from agent.core.constants import (
-    GEMINI_EMBEDDING_DIM,
-    GEMINI_EMBEDDING_MODEL,
-)
+from agent.core.config import settings
 from agent.core.embedding import GeminiEmbeddingModel, get_embedding_model
 from agent.core.logger import logger
 
@@ -39,9 +36,9 @@ async def test_record_ingest_file_real_embedding(monkeypatch) -> None:
 
     embedding = await get_embedding_model().aembed_query(text)
 
-    assert len(embedding) == GEMINI_EMBEDDING_DIM
+    assert len(embedding) == settings.EMBEDDING_DIM
     record = {
-        "model": GEMINI_EMBEDDING_MODEL,
+        "model": settings.EMBEDDING_MODEL,
         "file_name": INGEST_FILE.name,
         "content_sha256": hashlib.sha256(file_content).hexdigest(),
         "embedding": embedding,

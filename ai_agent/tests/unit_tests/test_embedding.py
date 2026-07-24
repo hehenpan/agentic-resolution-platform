@@ -3,10 +3,7 @@
 import pytest
 
 from agent.core import embedding
-from agent.core.constants import (
-    GEMINI_EMBEDDING_DIM,
-    GEMINI_EMBEDDING_MODEL,
-)
+from agent.core.config import settings
 
 
 class FakeGoogleGenerativeAIEmbeddings:
@@ -28,6 +25,8 @@ class FakeGoogleGenerativeAIEmbeddings:
 def test_get_embedding_model_uses_configured_model(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setattr(settings, "EMBEDDING_MODEL", "models/test-embedding")
+    monkeypatch.setattr(settings, "EMBEDDING_DIM", 128)
     monkeypatch.setattr(
         embedding,
         "GoogleGenerativeAIEmbeddings",
@@ -37,7 +36,7 @@ def test_get_embedding_model_uses_configured_model(
     model = embedding.get_embedding_model()
 
     assert isinstance(model, embedding.GeminiEmbeddingModel)
-    assert model.embeddings.model == GEMINI_EMBEDDING_MODEL
-    assert model.embeddings.model == "models/gemini-embedding-001"
-    assert model.embeddings.output_dimensionality == GEMINI_EMBEDDING_DIM
-    assert model.embeddings.output_dimensionality == 3072
+    assert model.embeddings.model == settings.EMBEDDING_MODEL
+    assert model.embeddings.model == "models/test-embedding"
+    assert model.embeddings.output_dimensionality == settings.EMBEDDING_DIM
+    assert model.embeddings.output_dimensionality == 128

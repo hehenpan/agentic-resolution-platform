@@ -4,10 +4,7 @@ from abc import ABC, abstractmethod
 
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 
-from agent.core.constants import (
-    GEMINI_EMBEDDING_DIM,
-    GEMINI_EMBEDDING_MODEL,
-)
+from agent.core.config import settings
 
 
 class EmbeddingModel(ABC):
@@ -41,6 +38,6 @@ class GeminiEmbeddingModel(EmbeddingModel):
 def get_embedding_model() -> EmbeddingModel:
     """Create the configured embedding model."""
     return GeminiEmbeddingModel(
-        model_name=GEMINI_EMBEDDING_MODEL,
-        output_dimensionality=GEMINI_EMBEDDING_DIM,
+        model_name=settings.EMBEDDING_MODEL,
+        output_dimensionality=settings.EMBEDDING_DIM,
     )

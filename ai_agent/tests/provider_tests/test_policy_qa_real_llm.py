@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 import pytest
 from langchain_core.messages import HumanMessage
 
-from agent.core.constants import GEMINI_CHAT_MODEL
+from agent.core.config import settings
 from agent.supervisor.policy_qa.nodes import generate_draft, retrieve_policy
 from agent.supervisor.policy_qa.state import PolicyQAState
 
@@ -32,7 +32,7 @@ async def test_policy_qa_real_llm_generates_grounded_draft(
     assert draft_update.get("generation_error") is None
     assert draft_update["draft"]
     record = {
-        "model": GEMINI_CHAT_MODEL,
+        "model": settings.LLM_CHAT_MODEL,
         "question": POLICY_QUESTION,
         "draft": draft_update["draft"],
         "recorded_at": datetime.now(timezone.utc).isoformat(),

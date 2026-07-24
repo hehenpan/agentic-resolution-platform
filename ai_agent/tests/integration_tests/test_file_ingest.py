@@ -10,7 +10,8 @@ from shared_common.schemas.ai_agent import (
     StructuredDataPart,
 )
 
-from agent.core.constants import GEMINI_EMBEDDING_DIM, QDRANT_COLLECTION_RAG
+from agent.core.config import settings
+from agent.core.constants import QDRANT_COLLECTION_RAG
 from agent.core.logger import logger
 from agent.core.qdrant import get_async_qdrant_client
 from agent.file_ingest import file_ingest_graph
@@ -48,13 +49,12 @@ class OfflineEmbeddingModel:
 async def test_file_ingest_success(monkeypatch: pytest.MonkeyPatch) -> None:
     """Verify file ingestion with chunked points storing deterministic UUIDs."""
     file_content = INGEST_FILE.read_bytes()
-    text = file_content.decode("utf-8", errors="ignore")
     record = EmbeddingRecord.model_validate_json(
         EMBEDDING_RECORD_FILE.read_text(encoding="utf-8")
     )
     assert record.file_name == INGEST_FILE.name
     assert record.content_sha256 == hashlib.sha256(file_content).hexdigest()
-    assert len(record.embedding) == GEMINI_EMBEDDING_DIM
+    assert len(record.embedding) == settings.EMBEDDING_DIM
 
     embedding_model = OfflineEmbeddingModel(record.embedding)
     monkeypatch.setattr(
