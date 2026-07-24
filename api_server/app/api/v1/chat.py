@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 from fastapi.responses import StreamingResponse
-from app.api.deps import get_current_user, get_chat_service, get_ai_agent_client
+from app.api.deps import get_current_user, get_chat_service, get_ai_agent_client, get_rbac_service
 from app.models.models import User
+from app.services.rbac_service import RBACServiceBase, Permission
 from app.schemas.common import BizCode
 from app.schemas.chat import (
     CreateChatSessionRequest,
@@ -141,11 +142,60 @@ async def list_chat_messages(
     cursor: str | None = Query(default=None, description="Cursor string representing create_ts_ms timestamp."),
     current_user: User = Depends(get_current_user),
     chat_service: ChatService = Depends(get_chat_service),
+    rbac_service: RBACServiceBase = Depends(get_rbac_service),
 ):
     """
     Query chat message history for a given session using cursor-based pagination on create_ts_ms.
     Returns messages ordered by create_ts_ms descending.
     """
+    # Enforce RBAC permission check
+    if not rbac_service.has_permission(
+        user=current_user,
+        permission=Permission.USER_READ,
+        resource_tenant_id=current_user.tenant_id
+    ):
+        logger.error(
+            f"Chat history query permission denied: user_id={current_user.user_id}, "
+            f"tenant_id={current_user.tenant_id}"
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Permission denied"
+        )
+
+    # Verify chat session ownership and status
+    session_obj = chat_service.wrapper.get_chat_session_by_id(
+        chat_session_id=chat_session_id,
+        tenant_id=current_user.tenant_id,
+        user_id=current_user.user_id,
+    )
+    if not session_obj:
+        logger.error(
+            f"ChatSession not found or forbidden: chat_session_id={chat_session_id}, "
+            f"user_id={current_user.user_id}"
+        )
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Chat session not found"
+        )
+
+    # Enforce tenant isolation / cross-tenant check via RBAC
+    if not rbac_service.has_permission(
+        user=current_user,
+        permission=Permission.USER_READ,
+        resource_tenant_id=session_obj.tenant_id
+    ):
+        logger.error(
+            f"Cross-tenant chat history query permission denied: chat_session_id={chat_session_id}, "
+            f"user_id={current_user.user_id}, "
+            f"user_tenant_id={current_user.tenant_id}, "
+            f"session_tenant_id={session_obj.tenant_id}"
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Permission denied"
+        )
+
     try:
         messages, has_more, next_cursor = chat_service.list_chat_messages_by_session(
             chat_session_id=chat_session_id,
@@ -207,6 +257,7 @@ async def send_chat_message(
     current_user: User = Depends(get_current_user),
     chat_service: ChatService = Depends(get_chat_service),
     ai_agent_client: AIAgentServerInterface = Depends(get_ai_agent_client),
+    rbac_service: RBACServiceBase = Depends(get_rbac_service),
 ):
     """
     1. Receive user message content and metadata.
@@ -214,6 +265,21 @@ async def send_chat_message(
     3. Check result: If failed, Router raises appropriate HTTP exception (404/500).
     4. If success, start step 5 SSE stream and return StreamingResponse.
     """
+    # Enforce RBAC permission check
+    if not rbac_service.has_permission(
+        user=current_user,
+        permission=Permission.USER_READ,
+        resource_tenant_id=current_user.tenant_id
+    ):
+        logger.error(
+            f"Send chat message permission denied: user_id={current_user.user_id}, "
+            f"tenant_id={current_user.tenant_id}"
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Permission denied"
+        )
+
     prep_result = await chat_service.prepare_chat_turn(
         chat_session_id=chat_session_id,
         current_user=current_user,
@@ -258,6 +324,7 @@ async def resume_chat_message(
     current_user: User = Depends(get_current_user),
     chat_service: ChatService = Depends(get_chat_service),
     ai_agent_client: AIAgentServerInterface = Depends(get_ai_agent_client),
+    rbac_service: RBACServiceBase = Depends(get_rbac_service),
 ):
     """
     1. Validate resume payload and schema_id.
@@ -265,6 +332,21 @@ async def resume_chat_message(
     3. Save user resume input message to chat_message table.
     4. Call ai_agent_sdk resume_turn and stream response events via SSE.
     """
+    # Enforce RBAC permission check
+    if not rbac_service.has_permission(
+        user=current_user,
+        permission=Permission.USER_READ,
+        resource_tenant_id=current_user.tenant_id
+    ):
+        logger.error(
+            f"Resume chat message permission denied: user_id={current_user.user_id}, "
+            f"tenant_id={current_user.tenant_id}"
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Permission denied"
+        )
+
     if request.chat_session_id != chat_session_id:
         logger.error(
             f"Path parameter chat_session_id '{chat_session_id}' mismatch with body chat_session_id '{request.chat_session_id}'"
