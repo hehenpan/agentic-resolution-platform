@@ -117,7 +117,21 @@ class FakeQueryAgentLLM:
         return StructuredInvokable()
 
     async def ainvoke(self, messages: Any, **kwargs: Any) -> AIMessage:
-        # If the last message is a ToolMessage, return final response to stop the loop
+        # Check if messages is a summarizer prompt or prompt value
+        prompt_text = ""
+        if isinstance(messages, list):
+            prompt_text = "\n".join(getattr(msg, "content", "") for msg in messages)
+        elif hasattr(messages, "to_string"):
+            prompt_text = messages.to_string()
+        elif hasattr(messages, "text"):
+            prompt_text = messages.text
+        elif isinstance(messages, str):
+            prompt_text = messages
+
+        if "retrieved the following data" in prompt_text or "summarizing" in prompt_text or "operator asked" in prompt_text:
+            return AIMessage(content="Here is the retrieved customer information summary.", type="ai")
+
+        # If the last message is a ToolMessage, return final response (retained for backward compatibility)
         if isinstance(messages, list) and messages and isinstance(messages[-1], ToolMessage):
             return AIMessage(content="Here is the retrieved customer information.", type="ai")
 

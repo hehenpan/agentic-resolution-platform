@@ -118,19 +118,19 @@ builder.add_conditional_edges(
     },
 )
 
-builder.add_edge(EcommerceQueryNodeNames.RETRIEVE_USER.value, EcommerceQueryNodeNames.QUERY_AGENT.value)
-builder.add_edge(EcommerceQueryNodeNames.RETRIEVE_ORDERS.value, EcommerceQueryNodeNames.QUERY_AGENT.value)
+builder.add_edge(EcommerceQueryNodeNames.RETRIEVE_USER.value, EcommerceQueryNodeNames.BUILD_RESPONSE.value)
+builder.add_edge(EcommerceQueryNodeNames.RETRIEVE_ORDERS.value, EcommerceQueryNodeNames.BUILD_RESPONSE.value)
 builder.add_edge(
     EcommerceQueryNodeNames.RETRIEVE_ORDER_DETAILS.value,
-    EcommerceQueryNodeNames.QUERY_AGENT.value,
+    EcommerceQueryNodeNames.BUILD_RESPONSE.value,
 )
 builder.add_edge(
     EcommerceQueryNodeNames.RETRIEVE_RETURNS_BY_ORDER.value,
-    EcommerceQueryNodeNames.QUERY_AGENT.value,
+    EcommerceQueryNodeNames.BUILD_RESPONSE.value,
 )
 builder.add_edge(
     EcommerceQueryNodeNames.RETRIEVE_RETURNS_BY_CUSTOMER.value,
-    EcommerceQueryNodeNames.QUERY_AGENT.value,
+    EcommerceQueryNodeNames.BUILD_RESPONSE.value,
 )
 builder.add_edge(EcommerceQueryNodeNames.BUILD_RESPONSE.value, END)
 
