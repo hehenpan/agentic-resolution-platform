@@ -1,5 +1,5 @@
 import React from 'react';
-import { Bot, Cpu, Moon, Sun, LogOut, User } from 'lucide-react';
+import { Bot, Moon, Sun, LogOut, User } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 
 interface HeaderProps {
@@ -23,17 +23,11 @@ export const Header: React.FC<HeaderProps> = ({ darkMode, onToggleTheme }) => {
               v1.0
             </span>
           </div>
-          <p className="text-xs text-muted-foreground">LangGraph Multi-Agent Orchestrator & Resolution Workbench</p>
+          <p className="text-xs text-muted-foreground">LangGraph & MCP Multi-Agent Orchestrator & Resolution Workbench</p>
         </div>
       </div>
 
       <div className="flex items-center space-x-4">
-        <div className="flex items-center space-x-2 text-xs text-emerald-400 bg-emerald-500/10 px-3 py-1.5 rounded-full border border-emerald-500/20">
-          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-          <Cpu className="w-3.5 h-3.5" />
-          <span>FastAPI Connected</span>
-        </div>
-
         {isAuthenticated && (
           <div className="flex items-center space-x-3 border-l border-border pl-4">
             <div className="flex items-center space-x-2 text-xs text-slate-300 bg-slate-800/60 px-2.5 py-1.5 rounded-lg border border-slate-700/50">

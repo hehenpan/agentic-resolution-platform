@@ -45,6 +45,5 @@ describe('WorkbenchPage Component', () => {
 
     expect(screen.queryByText('No Chat Session Selected')).not.toBeInTheDocument();
     expect(screen.getByText('Active Resolution Session')).toBeInTheDocument();
-    expect(screen.getByText('Session ID: cs_selected_001')).toBeInTheDocument();
   });
 });

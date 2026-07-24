@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Plus, MessageSquare, Shield, Terminal, Loader2 } from 'lucide-react';
+import { Plus, MessageSquare, Loader2 } from 'lucide-react';
 import { useChatStore } from '../../store/chatStore';
 
 export const Sidebar: React.FC = () => {
@@ -72,17 +72,6 @@ export const Sidebar: React.FC = () => {
             </button>
           );
         })}
-      </div>
-
-      <div className="p-4 border-t border-border bg-muted/20 space-y-2">
-        <div className="flex items-center space-x-2 text-xs text-muted-foreground">
-          <Shield className="w-4 h-4 text-primary" />
-          <span>LangGraph Supervisor Subgraphs</span>
-        </div>
-        <div className="flex items-center space-x-2 text-xs text-muted-foreground">
-          <Terminal className="w-4 h-4 text-emerald-400" />
-          <span>Human-in-the-Loop Interrupts</span>
-        </div>
       </div>
     </aside>
   );
