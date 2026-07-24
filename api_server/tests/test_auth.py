@@ -77,6 +77,13 @@ def test_login_success(client):
     data = response.json()
     assert data["code"] == BizCode.SUCCESS
     
+    # Verify user profile data is returned in response
+    user_data = data["data"]
+    assert user_data["email"] == email
+    assert user_data["user_type"] == "user"
+    assert user_data["tenant_id"] == 1
+    assert "user_id" in user_data
+    
     # 3. Verify cookie is set correctly
     assert SESSION_COOKIE_KEY in response.cookies
     assert response.cookies[SESSION_COOKIE_KEY] != ""
