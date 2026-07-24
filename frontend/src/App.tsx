@@ -20,7 +20,7 @@ const queryClient = new QueryClient({
 
 export const App: React.FC = () => {
   const [darkMode, setDarkMode] = useState(true);
-  const { isAuthenticated, checkAuth } = useAuthStore();
+  const { isAuthenticated, userType, checkAuth } = useAuthStore();
 
   useEffect(() => {
     checkAuth();
@@ -41,6 +41,9 @@ export const App: React.FC = () => {
     setDarkMode(!darkMode);
   };
 
+  // Tenant admins land on /tenant_admin; all other roles land on /chat
+  const defaultRoute = userType === 'tenant_admin' ? '/tenant_admin' : '/chat';
+
   return (
     <QueryClientProvider client={queryClient}>
       <div className={`h-screen max-h-screen flex flex-col overflow-hidden ${darkMode ? 'dark' : 'light'}`}>
@@ -55,7 +58,7 @@ export const App: React.FC = () => {
                   <LoginModal />
                 </div>
               ) : (
-                <Navigate to="/chat" replace />
+                <Navigate to={defaultRoute} replace />
               )
             }
           />

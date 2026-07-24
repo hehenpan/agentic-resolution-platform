@@ -1,5 +1,6 @@
 import React from 'react';
-import { Bot, Moon, Sun, LogOut, User } from 'lucide-react';
+import { Bot, Moon, Sun, LogOut, User, Settings } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../store/authStore';
 
 interface HeaderProps {
@@ -8,7 +9,10 @@ interface HeaderProps {
 }
 
 export const Header: React.FC<HeaderProps> = ({ darkMode, onToggleTheme }) => {
-  const { isAuthenticated, userEmail, logout } = useAuthStore();
+  const { isAuthenticated, userEmail, userType, logout } = useAuthStore();
+  const navigate = useNavigate();
+
+  const isTenantAdmin = userType === 'tenant_admin';
 
   return (
     <header className="h-16 border-b border-border glass-panel px-6 flex items-center justify-between z-10">
@@ -34,6 +38,20 @@ export const Header: React.FC<HeaderProps> = ({ darkMode, onToggleTheme }) => {
               <User className="w-3.5 h-3.5 text-blue-400" />
               <span>{userEmail || 'Authenticated User'}</span>
             </div>
+            <button
+              id="admin-console-button"
+              onClick={() => navigate('/tenant_admin')}
+              disabled={!isTenantAdmin}
+              className={`flex items-center space-x-1.5 text-xs px-2.5 py-1.5 rounded-lg border transition-colors ${
+                isTenantAdmin
+                  ? 'text-indigo-400 hover:text-indigo-300 bg-indigo-500/10 hover:bg-indigo-500/20 border-indigo-500/20 cursor-pointer'
+                  : 'text-slate-500 bg-slate-800/30 border-slate-700/30 cursor-not-allowed opacity-50'
+              }`}
+              title={isTenantAdmin ? 'Open Admin Console' : 'Admin access restricted to Tenant Admins'}
+            >
+              <Settings className="w-3.5 h-3.5" />
+              <span>Admin Console</span>
+            </button>
             <button
               onClick={() => logout()}
               className="flex items-center space-x-1.5 text-xs text-rose-400 hover:text-rose-300 bg-rose-500/10 hover:bg-rose-500/20 px-2.5 py-1.5 rounded-lg border border-rose-500/20 transition-colors"

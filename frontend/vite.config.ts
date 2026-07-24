@@ -8,6 +8,7 @@ function apiMockPlugin(): Plugin {
   const mockSessionStore: unknown[] = [];
   const mockMessageStore: Record<string, unknown[]> = {};
   const mockReturnsStore: Record<number, any[]> = {};
+  const mockFilesStore: any[] = [];
 
   return {
     name: 'vite-plugin-api-mock',
@@ -912,6 +913,76 @@ function apiMockPlugin(): Plugin {
             }, 600);
           });
 
+          return;
+        }
+
+        // Mock GET /api/v1/files (file list)
+        if (url.replace(/\?.*$/, '') === '/api/v1/files' && req.method === 'GET') {
+          res.setHeader('Content-Type', 'application/json');
+          // Sort by create_ts descending (newest first)
+          const sorted = [...mockFilesStore].sort((a, b) => b.create_ts - a.create_ts);
+          res.end(
+            JSON.stringify({
+              code: 0,
+              message: 'Success',
+              data: {
+                items: sorted,
+                last_cursor: '',
+              },
+            })
+          );
+          return;
+        }
+
+        // Mock POST /api/v1/files/upload (file upload)
+        if (url.replace(/\?.*$/, '') === '/api/v1/files/upload' && req.method === 'POST') {
+          const chunks: Buffer[] = [];
+          req.on('data', (chunk: Buffer) => {
+            chunks.push(chunk);
+          });
+          req.on('end', () => {
+            const body = Buffer.concat(chunks).toString();
+            // Extract filename from multipart Content-Disposition header
+            let fileName = 'unnamed_file';
+            const filenameMatch = body.match(/filename="([^"]+)"/);
+            if (filenameMatch) {
+              fileName = filenameMatch[1];
+            }
+            // Extract file extension as type
+            const extMatch = fileName.match(/\.([^.]+)$/);
+            const fileType = extMatch ? extMatch[1].toLowerCase() : 'unknown';
+            const contentLength = Number(req.headers['content-length'] || 0);
+
+            const now = Date.now();
+            const fileId = Math.floor(Math.random() * 900000) + 100000;
+            const newFile = {
+              file_id: fileId,
+              file_name: fileName,
+              file_size: contentLength,
+              file_type: fileType,
+              file_md5_hash: `mock_md5_${now}`,
+              owner_user_id: 101,
+              owner_email: 'admin@tenant.com',
+              create_ts: Math.floor(now / 1000),
+              status: 1,
+              vector_db_sync_status: 0,
+            };
+            mockFilesStore.push(newFile);
+
+            res.statusCode = 201;
+            res.setHeader('Content-Type', 'application/json');
+            res.end(
+              JSON.stringify({
+                code: 0,
+                message: 'File uploaded successfully',
+                data: {
+                  file_id: fileId,
+                  file_name: fileName,
+                  file_size: contentLength,
+                },
+              })
+            );
+          });
           return;
         }
 

@@ -104,17 +104,7 @@ export const Sidebar: React.FC = () => {
             
             <button className="w-full text-left p-3 rounded-xl transition-all flex items-center space-x-3 bg-primary/10 border border-primary/20 text-foreground">
               <FileText className="w-4 h-4 text-primary" />
-              <span className="text-sm font-medium">File Uploads</span>
-            </button>
-
-            <button className="w-full text-left p-3 rounded-xl transition-all flex items-center space-x-3 text-muted-foreground hover:bg-muted/40 hover:text-foreground">
-              <Users className="w-4 h-4" />
-              <span className="text-sm font-medium">User Management</span>
-            </button>
-
-            <button className="w-full text-left p-3 rounded-xl transition-all flex items-center space-x-3 text-muted-foreground hover:bg-muted/40 hover:text-foreground">
-              <Database className="w-4 h-4" />
-              <span className="text-sm font-medium">Vector Storage</span>
+              <span className="text-sm font-medium">File Management</span>
             </button>
           </div>
         )}
