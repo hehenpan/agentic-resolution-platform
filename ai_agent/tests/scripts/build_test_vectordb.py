@@ -25,10 +25,8 @@ os.environ["APP_ENV"] = "dev"
 
 load_dotenv(dotenv_path=tests_dir.parent / ".env")
 
-from agent.core.constants import (  # noqa: E402
-    GEMINI_EMBEDDING_DIM,
-    QDRANT_COLLECTION_RAG,
-)
+from agent.core.config import settings  # noqa: E402
+from agent.core.constants import QDRANT_COLLECTION_RAG  # noqa: E402
 from agent.core.embedding import get_embedding_model  # noqa: E402
 from agent.core.logger import logger  # noqa: E402
 from agent.core.vectordb import RAGFileVectorPayload  # noqa: E402
@@ -55,7 +53,10 @@ async def build_database():
 
     client.create_collection(
         collection_name=QDRANT_COLLECTION_RAG,
-        vectors_config=VectorParams(size=GEMINI_EMBEDDING_DIM, distance=Distance.COSINE),
+        vectors_config=VectorParams(
+            size=settings.EMBEDDING_DIM,
+            distance=Distance.COSINE,
+        ),
     )
 
     embedding_model = get_embedding_model()

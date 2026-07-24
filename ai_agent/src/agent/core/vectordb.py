@@ -7,7 +7,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 from qdrant_client.models import Distance, PointStruct, VectorParams
 
-from agent.core.constants import GEMINI_EMBEDDING_DIM
+from agent.core.config import settings
 from agent.core.logger import logger
 from agent.core.qdrant import get_async_qdrant_client
 
@@ -79,7 +79,7 @@ class QdrantVectorDB(VectorDB):
             await client.create_collection(
                 collection_name=collection_name,
                 vectors_config=VectorParams(
-                    size=GEMINI_EMBEDDING_DIM,
+                    size=settings.EMBEDDING_DIM,
                     distance=Distance.COSINE,
                 ),
             )

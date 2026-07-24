@@ -24,6 +24,8 @@ services:
     volumes:
       - ../frontend:/app
       - /app/node_modules
+    depends_on:
+      - api_server
     networks:
       - platform-network
 

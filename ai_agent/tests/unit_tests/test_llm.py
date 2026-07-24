@@ -1,7 +1,7 @@
 from typing import Any
 
 from agent.core import llm
-from agent.core.constants import GEMINI_CHAT_MODEL
+from agent.core.config import settings
 
 
 class FakeGoogleGenerativeAI:
@@ -13,6 +13,7 @@ class FakeGoogleGenerativeAI:
 
 
 def test_get_llm_model_creates_configured_model(monkeypatch) -> None:
+    monkeypatch.setattr(settings, "LLM_CHAT_MODEL", "test-chat-model")
     monkeypatch.setattr(
         llm,
         "ChatGoogleGenerativeAI",
@@ -23,6 +24,6 @@ def test_get_llm_model_creates_configured_model(monkeypatch) -> None:
     second_model = llm.get_llm_model()
 
     assert isinstance(first_model, FakeGoogleGenerativeAI)
-    assert first_model.model == GEMINI_CHAT_MODEL
-    assert first_model.model == "gemini-3.1-flash-lite"
+    assert first_model.model == settings.LLM_CHAT_MODEL
+    assert first_model.model == "test-chat-model"
     assert second_model is not first_model
