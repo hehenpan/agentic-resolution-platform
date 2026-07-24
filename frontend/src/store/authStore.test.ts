@@ -10,6 +10,7 @@ describe('authStore', () => {
       isAuthenticated: false,
       userEmail: null,
       tenantId: null,
+      userType: null,
       isLoading: false,
       error: null,
     });
@@ -21,6 +22,7 @@ describe('authStore', () => {
     expect(isAuth).toBe(false);
     expect(useAuthStore.getState().isAuthenticated).toBe(false);
     expect(useAuthStore.getState().tenantId).toBeNull();
+    expect(useAuthStore.getState().userType).toBeNull();
   });
 
   it('checkAuth returns true when sessionid cookie exists and sets tenantId to 1', () => {
@@ -29,13 +31,19 @@ describe('authStore', () => {
     expect(isAuth).toBe(true);
     expect(useAuthStore.getState().isAuthenticated).toBe(true);
     expect(useAuthStore.getState().tenantId).toBe(1);
+    expect(useAuthStore.getState().userType).toBe('user');
   });
 
   it('login succeeds and sets session cookie, email and tenantId to 1', async () => {
     vi.spyOn(authService, 'login').mockResolvedValueOnce({
       code: 0,
       message: 'User logged in successfully',
-      data: { tenant_id: 1 },
+      data: {
+        user_id: 101,
+        email: 'user@example.com',
+        user_type: 'user',
+        tenant_id: 1,
+      },
     });
 
     const success = await useAuthStore.getState().login({
@@ -47,18 +55,21 @@ describe('authStore', () => {
     expect(useAuthStore.getState().isAuthenticated).toBe(true);
     expect(useAuthStore.getState().userEmail).toBe('user@example.com');
     expect(useAuthStore.getState().tenantId).toBe(1);
+    expect(useAuthStore.getState().userType).toBe('user');
     expect(getCookie('sessionid')).not.toBeNull();
   });
 
   it('logout clears session cookie and resets state', async () => {
     setCookie('sessionid', 'test_session');
-    useAuthStore.setState({ isAuthenticated: true, userEmail: 'user@example.com', tenantId: 1 });
+    useAuthStore.setState({ isAuthenticated: true, userEmail: 'user@example.com', tenantId: 1, userType: 'user' });
 
     await useAuthStore.getState().logout();
 
     expect(useAuthStore.getState().isAuthenticated).toBe(false);
     expect(useAuthStore.getState().userEmail).toBeNull();
     expect(useAuthStore.getState().tenantId).toBeNull();
+    expect(useAuthStore.getState().userType).toBeNull();
     expect(getCookie('sessionid')).toBeNull();
   });
 });
+

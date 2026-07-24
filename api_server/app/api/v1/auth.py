@@ -1,10 +1,10 @@
 from fastapi import APIRouter, status, Request, Depends, HTTPException
 from fastapi.responses import JSONResponse
 
-from app.schemas.auth import RegisterRequest, RegisterResponse, LoginRequest, LoginResponse
+from app.schemas.auth import RegisterRequest, RegisterResponse, LoginRequest, LoginResponse, UserRole, LoginData
 from app.schemas.common import BizCode
 from app.api.deps import get_user_service
-from app.models.models import UserType
+from app.models.models import UserType, User
 from loguru import logger
 from utils.commons import generate_sessionid
 from app.core.constants import SESSION_EXPIRE_SECONDS, SESSION_COOKIE_KEY, SESSION_COOKIE_SECURE
@@ -59,8 +59,24 @@ async def login(request: Request,
                             detail="Error logging in user")
 
         sessionid = user_service.create_session(email=login_request.email)
+        
+        user = user_service.dbsession.query(User).filter(User.email == login_request.email).first()
+        if not user:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, 
+                            detail="Error logging in user")
 
-
+        role_map = {
+            UserType.ADMIN: UserRole.ADMIN,
+            UserType.USER: UserRole.USER,
+            UserType.TENANT_ADMIN: UserRole.TENANT_ADMIN,
+        }
+        user_role = role_map.get(user.user_type, UserRole.USER)
+        login_data = LoginData(
+            user_id=user.user_id,
+            email=user.email,
+            user_type=user_role,
+            tenant_id=user.tenant_id,
+        )
 
     except Exception as e:
         logger.error(f"user login error {e}")
@@ -73,6 +89,7 @@ async def login(request: Request,
     resp = LoginResponse(
         code=BizCode.SUCCESS, 
         message="User logged in successfully",
+        data=login_data,
     )
     response = JSONResponse(
                 status_code=status.HTTP_200_OK,

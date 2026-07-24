@@ -21,17 +21,36 @@ function apiMockPlugin(): Plugin {
 
         // Mock POST /api/v1/auth/login
         if (url.includes('/api/v1/auth/login') && req.method === 'POST') {
-          res.setHeader('Content-Type', 'application/json');
-          res.setHeader('Set-Cookie', `sessionid=mock_session_${Date.now()}; Path=/;`);
-          res.end(
-            JSON.stringify({
-              code: 0,
-              message: 'User logged in successfully',
-              data: {
-                tenant_id: 1,
-              },
-            })
-          );
+          let body = '';
+          req.on('data', (chunk) => {
+            body += chunk;
+          });
+          req.on('end', () => {
+            let email = 'mock_user@example.com';
+            try {
+              const parsed = JSON.parse(body);
+              if (parsed.email) email = parsed.email;
+            } catch {
+              // ignore
+            }
+            const isTenantAdmin = email.includes('admin');
+            const userType = isTenantAdmin ? 'tenant_admin' : 'user';
+
+            res.setHeader('Content-Type', 'application/json');
+            res.setHeader('Set-Cookie', `sessionid=mock_session_${Date.now()}; Path=/;`);
+            res.end(
+              JSON.stringify({
+                code: 0,
+                message: 'User logged in successfully',
+                data: {
+                  user_id: isTenantAdmin ? 101 : 102,
+                  email: email,
+                  user_type: userType,
+                  tenant_id: 1,
+                },
+              })
+            );
+          });
           return;
         }
 
