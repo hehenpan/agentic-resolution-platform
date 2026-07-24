@@ -78,6 +78,7 @@ export interface AgentResumeRequest {
 
 export interface ChatMessage {
   id: string;
+  eventId?: string;
   role: 'user' | 'assistant' | 'system' | 'tool';
   content: string;
   timestamp: string;
@@ -306,6 +307,7 @@ export interface WebAgentOutput {
 
 export interface ChatMessage {
   id: string;
+  eventId?: string;
   role: 'user' | 'assistant' | 'system' | 'tool';
   content: string;
   timestamp: string;
@@ -349,5 +351,4 @@ export interface ChatSession {
   status: AgentRunStatus;
   activeInterrupt?: InterruptEventData | null;
 }
-
 

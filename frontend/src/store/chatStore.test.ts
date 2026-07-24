@@ -4,6 +4,7 @@ import { chatService } from '../services/chatService';
 
 describe('chatStore', () => {
   beforeEach(() => {
+    vi.useRealTimers();
     useChatStore.setState({
       sessions: [],
       sessionMessages: {},
@@ -168,6 +169,85 @@ describe('chatStore', () => {
     expect(useChatStore.getState().isStreaming).toBe(false);
   });
 
+  it('sendMessageStream ignores repeated visible SSE events with the same event_id', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2025-07-23T10:00:00.000Z'));
+    const createdAt = Date.parse('2025-07-23T10:00:01.000Z') / 1000;
+
+    vi.spyOn(chatService, 'sendSessionMessageStream').mockImplementation(
+      async (_sessionId, _content, onMessage, _onError, onClose) => {
+        onMessage('agent.output_produced', {
+          event_id: 'evt_duplicate_output',
+          created_at: createdAt,
+          output: { parts: [{ kind: 'text', text: 'First visible response.' }] },
+        });
+        onMessage('agent.output_produced', {
+          event_id: 'evt_duplicate_output',
+          created_at: createdAt + 1,
+          output: { parts: [{ kind: 'text', text: 'Duplicate response should not render.' }] },
+        });
+        onMessage('agent.run_completed', { kind: 'agent.run_completed' });
+        if (onClose) onClose();
+      }
+    );
+
+    await useChatStore.getState().sendMessageStream('cs_101', 'Test message');
+
+    const messages = useChatStore.getState().sessionMessages['cs_101'];
+    expect(messages).toHaveLength(2);
+    expect(messages[1].role).toBe('assistant');
+    expect(messages[1].eventId).toBe('evt_duplicate_output');
+    expect(messages[1].content).toBe('First visible response.');
+    expect(messages[1].content).not.toContain('Duplicate response');
+    expect(messages[1].timestamp).toBe('2025-07-23T10:00:01.000Z');
+  });
+
+  it('sendMessageStream inserts visible SSE messages by event timestamp', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2025-07-23T10:00:10.000Z'));
+    const outputCreatedAt = Date.parse('2025-07-23T10:00:15.000Z') / 1000;
+
+    useChatStore.setState({
+      sessionMessages: {
+        cs_101: [
+          {
+            id: 'existing_later',
+            role: 'system',
+            content: 'Existing later message',
+            timestamp: '2025-07-23T10:00:20.000Z',
+            status: 'completed',
+          },
+        ],
+      },
+    });
+
+    vi.spyOn(chatService, 'sendSessionMessageStream').mockImplementation(
+      async (_sessionId, _content, onMessage, _onError, onClose) => {
+        onMessage('agent.output_produced', {
+          event_id: 'evt_ordered_output',
+          created_at: outputCreatedAt,
+          output: { parts: [{ kind: 'text', text: 'Timestamp ordered response.' }] },
+        });
+        onMessage('agent.run_completed', { kind: 'agent.run_completed' });
+        if (onClose) onClose();
+      }
+    );
+
+    await useChatStore.getState().sendMessageStream('cs_101', 'User at ten seconds');
+
+    const messages = useChatStore.getState().sessionMessages['cs_101'];
+    expect(messages.map((message) => message.content)).toEqual([
+      'User at ten seconds',
+      'Timestamp ordered response.',
+      'Existing later message',
+    ]);
+    expect(messages.map((message) => message.timestamp)).toEqual([
+      '2025-07-23T10:00:10.000Z',
+      '2025-07-23T10:00:15.000Z',
+      '2025-07-23T10:00:20.000Z',
+    ]);
+  });
+
   it('resumeSessionMessageStream calls chatService.resumeSessionMessageStream and updates state', async () => {
     vi.spyOn(chatService, 'resumeSessionMessageStream').mockImplementation(
       async (_sessionId, _req, onMessage, _onError, onClose) => {
@@ -243,4 +323,3 @@ describe('chatStore', () => {
     );
   });
 });
-
