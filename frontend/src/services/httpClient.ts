@@ -21,11 +21,16 @@ export async function request<T>(
   url: string,
   options: RequestInit = {}
 ): Promise<T> {
-  const headers = {
-    'Content-Type': 'application/json',
+  const isFormData = options.body instanceof FormData;
+  const headers: Record<string, string> = {
     Accept: 'application/json',
-    ...(options.headers || {}),
+    ...(options.headers as Record<string, string> || {}),
   };
+
+  // Let the browser set Content-Type with correct boundary for FormData
+  if (!isFormData) {
+    headers['Content-Type'] = 'application/json';
+  }
 
   const response = await fetch(url, {
     ...options,
