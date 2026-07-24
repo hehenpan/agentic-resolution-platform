@@ -222,10 +222,25 @@ def test_list_chat_messages_success_and_pagination(client, db_session: Session):
     """
     login_user_client(client)
 
-    from app.models.models import ChatMessage, ChatMessageSenderType as ModelSenderType
-    from utils.commons import generate_uuid_hex
+    from app.models.models import ChatMessage, ChatMessageSenderType as ModelSenderType, ChatSession, ChatSessionStatus, User
+    from utils.commons import generate_uuid_hex, get_current_ts
+
+    user = db_session.query(User).filter(User.email == TEST_USER_EMAIL).first()
+    assert user is not None
 
     session_id = f"cs_{generate_uuid_hex()}"
+
+    chat_session = ChatSession(
+        chat_session_id=session_id,
+        tenant_id=user.tenant_id,
+        user_id=user.user_id,
+        title="Test Chat Session",
+        status=ChatSessionStatus.ACTIVE,
+        create_ts=get_current_ts(),
+        update_ts=get_current_ts(),
+    )
+    db_session.add(chat_session)
+    db_session.commit()
 
     msg1 = ChatMessage(
         event_id=f"evt_{generate_uuid_hex()}",
@@ -304,7 +319,26 @@ def test_list_chat_messages_invalid_cursor(client, db_session: Session):
     """
     login_user_client(client)
 
+    from app.models.models import ChatSession, ChatSessionStatus, User
+    from utils.commons import get_current_ts
+
+    user = db_session.query(User).filter(User.email == TEST_USER_EMAIL).first()
+    assert user is not None
+
     session_id = "cs_test_invalid_cursor"
+
+    chat_session = ChatSession(
+        chat_session_id=session_id,
+        tenant_id=user.tenant_id,
+        user_id=user.user_id,
+        title="Test Chat Session",
+        status=ChatSessionStatus.ACTIVE,
+        create_ts=get_current_ts(),
+        update_ts=get_current_ts(),
+    )
+    db_session.add(chat_session)
+    db_session.commit()
+
     response = client.get(f"https://testserver/api/v1/chat/sessions/{session_id}/messages?cursor=invalid_cursor_str")
     assert response.status_code == status.HTTP_400_BAD_REQUEST
     assert "Invalid cursor format" in response.json()["detail"]
@@ -935,4 +969,52 @@ def test_project_human_input_schema_id_known_and_unknown():
     assert web_event.request.prompt == "Please provide user email"
     assert "properties" in web_event.request.input_schema
     assert "email" in web_event.request.input_schema["properties"]
+
+
+def test_chat_endpoints_rbac_denied(client):
+    """
+    Test that when RBAC permission is denied:
+    1. GET /api/v1/chat/sessions/{chat_session_id}/messages returns 403 Forbidden.
+    2. POST /api/v1/chat/sessions/{chat_session_id}/messages returns 403 Forbidden.
+    3. POST /api/v1/chat/sessions/{chat_session_id}/resume returns 403 Forbidden.
+    """
+    login_user_client(client)
+    from app.api.deps import get_rbac_service
+    from app.services.rbac_service import RBACServiceBase
+
+    class MockRBACDenied(RBACServiceBase):
+        def has_permission(self, user, permission, resource_tenant_id=None):
+            return False
+
+    client.app.dependency_overrides[get_rbac_service] = MockRBACDenied
+    try:
+        session_id = "cs_some_session"
+        # 1. GET messages
+        res_get = client.get(f"https://testserver/api/v1/chat/sessions/{session_id}/messages")
+        assert res_get.status_code == status.HTTP_403_FORBIDDEN
+        assert res_get.json()["detail"] == "Permission denied"
+
+        # 2. POST messages
+        res_post = client.post(
+            f"https://testserver/api/v1/chat/sessions/{session_id}/messages",
+            json={"content": "Hello"},
+        )
+        assert res_post.status_code == status.HTTP_403_FORBIDDEN
+        assert res_post.json()["detail"] == "Permission denied"
+
+        # 3. POST resume
+        res_resume = client.post(
+            f"https://testserver/api/v1/chat/sessions/{session_id}/resume",
+            json={
+                "chat_session_id": session_id,
+                "thread_id": "thread_1",
+                "schema_id": "human_input.get_orders.v1",
+                "resume_payload": {"email": "test@example.com"},
+            },
+        )
+        assert res_resume.status_code == status.HTTP_403_FORBIDDEN
+        assert res_resume.json()["detail"] == "Permission denied"
+    finally:
+        client.app.dependency_overrides.pop(get_rbac_service, None)
+
 
