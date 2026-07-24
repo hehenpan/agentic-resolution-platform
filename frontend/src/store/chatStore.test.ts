@@ -143,6 +143,78 @@ describe('chatStore', () => {
     expect(messages[1].content).toBe('Agent response');
   });
 
+  it('fetchSessionMessages filters out agent.run_failed and agent.run_interrupted items', async () => {
+    const mockItems = [
+      {
+        id: 4,
+        event_id: 'evt_104',
+        chat_session_id: 'cs_101',
+        thread_id: 'thread_1',
+        run_id: 'run_1',
+        sender_type: 3,
+        event_kind: 'agent.run_interrupted',
+        sequence: 3,
+        payload_json: JSON.stringify({ kind: 'agent.run_interrupted' }),
+        create_ts_ms: 1753236003000,
+      },
+      {
+        id: 3,
+        event_id: 'evt_103',
+        chat_session_id: 'cs_101',
+        thread_id: 'thread_1',
+        run_id: 'run_1',
+        sender_type: 3,
+        event_kind: 'agent.run_failed',
+        sequence: 2,
+        payload_json: JSON.stringify({ kind: 'agent.run_failed', error: { message: 'Agent run failed' } }),
+        create_ts_ms: 1753236002000,
+      },
+      {
+        id: 2,
+        event_id: 'evt_102',
+        chat_session_id: 'cs_101',
+        thread_id: 'thread_1',
+        run_id: 'run_1',
+        sender_type: 2,
+        event_kind: 'agent.output_produced',
+        sequence: 1,
+        payload_json: JSON.stringify({ output: { parts: [{ text: 'Agent response' }] } }),
+        create_ts_ms: 1753236001000,
+      },
+      {
+        id: 1,
+        event_id: 'evt_101',
+        chat_session_id: 'cs_101',
+        thread_id: 'thread_1',
+        run_id: 'run_1',
+        sender_type: 1,
+        event_kind: 'user_message',
+        sequence: 0,
+        payload_json: JSON.stringify({ content: 'User question' }),
+        create_ts_ms: 1753236000000,
+      },
+    ];
+
+    vi.spyOn(chatService, 'listSessionMessages').mockResolvedValueOnce({
+      code: 0,
+      message: 'Success',
+      data: {
+        has_more: false,
+        next_cursor: null,
+        items: mockItems,
+      },
+    });
+
+    await useChatStore.getState().fetchSessionMessages('cs_101');
+
+    const messages = useChatStore.getState().sessionMessages['cs_101'];
+    expect(messages).toHaveLength(2);
+    expect(messages[0].role).toBe('user');
+    expect(messages[0].content).toBe('User question');
+    expect(messages[1].role).toBe('assistant');
+    expect(messages[1].content).toBe('Agent response');
+  });
+
   it('fetchSessionMessages maps structured data output and user resume messages correctly from history', async () => {
     const mockItems = [
       {
@@ -303,10 +375,12 @@ describe('chatStore', () => {
     await sendPromise;
 
     const messages = useChatStore.getState().sessionMessages['cs_101'];
-    expect(messages[1].role).toBe('assistant');
-    expect(messages[1].content).toBe('Agent response timed out. Please try again.');
-    expect(messages[1].status).toBe('error');
+    // Agent placeholder should be removed; only the user message remains
+    expect(messages).toHaveLength(1);
+    expect(messages[0].role).toBe('user');
+    expect(messages[0].status).toBe('error');
     expect(useChatStore.getState().isStreaming).toBe(false);
+    expect(useChatStore.getState().error).toBe('Agent response timed out. Please try again.');
   });
 
   it('sendMessageStream ignores repeated visible SSE events with the same event_id', async () => {
@@ -462,5 +536,99 @@ describe('chatStore', () => {
       expect.any(Function),
       expect.any(AbortSignal)
     );
+  });
+
+  it('sendMessageStream removes agent placeholder and marks user message as error on SSE error event', async () => {
+    vi.spyOn(chatService, 'sendSessionMessageStream').mockImplementation(
+      async (_sessionId, _content, onMessage, _onError, onClose) => {
+        onMessage('error', { detail: 'Backend processing error' });
+        if (onClose) onClose();
+      }
+    );
+
+    await useChatStore.getState().sendMessageStream('cs_101', 'Test message');
+
+    const messages = useChatStore.getState().sessionMessages['cs_101'];
+    // Agent placeholder should be removed; only user message remains
+    expect(messages).toHaveLength(1);
+    expect(messages[0].role).toBe('user');
+    expect(messages[0].status).toBe('error');
+    expect(useChatStore.getState().error).toBe('Backend processing error');
+    expect(useChatStore.getState().isStreaming).toBe(false);
+  });
+
+  it('sendMessageStream handles agent.run_failed SSE event correctly', async () => {
+    vi.spyOn(chatService, 'sendSessionMessageStream').mockImplementation(
+      async (_sessionId, _content, onMessage, _onError, onClose) => {
+        onMessage('agent.run_failed', { error: { message: 'The agent run could not be completed.' } });
+        if (onClose) onClose();
+      }
+    );
+
+    await useChatStore.getState().sendMessageStream('cs_101', 'Test message');
+
+    const messages = useChatStore.getState().sessionMessages['cs_101'];
+    // Agent placeholder should be removed; only user message remains, marked as error
+    expect(messages).toHaveLength(1);
+    expect(messages[0].role).toBe('user');
+    expect(messages[0].status).toBe('error');
+    expect(useChatStore.getState().error).toBe('The agent run could not be completed.');
+    expect(useChatStore.getState().isStreaming).toBe(false);
+  });
+
+  it('sendMessageStream removes agent placeholder and marks user message as error on thrown exception', async () => {
+    vi.spyOn(chatService, 'sendSessionMessageStream').mockRejectedValueOnce(
+      new Error('Network failure')
+    );
+
+    await useChatStore.getState().sendMessageStream('cs_101', 'Test message');
+
+    const messages = useChatStore.getState().sessionMessages['cs_101'];
+    expect(messages).toHaveLength(1);
+    expect(messages[0].role).toBe('user');
+    expect(messages[0].status).toBe('error');
+    expect(useChatStore.getState().error).toBe('Network failure');
+    expect(useChatStore.getState().isStreaming).toBe(false);
+  });
+
+  it('removeMessage removes the specified message from the session', () => {
+    useChatStore.setState({
+      sessionMessages: {
+        cs_101: [
+          { id: 'msg_1', role: 'user', content: 'Hello', timestamp: new Date().toISOString() },
+          { id: 'msg_2', role: 'assistant', content: '', timestamp: new Date().toISOString(), status: 'streaming' },
+        ],
+      },
+    });
+
+    useChatStore.getState().removeMessage('cs_101', 'msg_2');
+
+    const messages = useChatStore.getState().sessionMessages['cs_101'];
+    expect(messages).toHaveLength(1);
+    expect(messages[0].id).toBe('msg_1');
+  });
+
+  it('resumeSessionMessageStream removes agent placeholder and marks user message as error on exception', async () => {
+    vi.spyOn(chatService, 'resumeSessionMessageStream').mockRejectedValueOnce(
+      new Error('Resume network error')
+    );
+
+    useChatStore.setState({
+      activeInterrupt: {
+        interrupt_id: 'intr_err',
+        thread_id: 'thread_err',
+        schema_id: 'human_input.get_user.v1',
+      },
+    });
+
+    await useChatStore.getState().resumeSessionMessageStream('cs_101', { email: 'alex@example.com' });
+
+    const messages = useChatStore.getState().sessionMessages['cs_101'];
+    // Agent placeholder should be removed; only user message remains
+    expect(messages).toHaveLength(1);
+    expect(messages[0].role).toBe('user');
+    expect(messages[0].status).toBe('error');
+    expect(useChatStore.getState().error).toBe('Resume network error');
+    expect(useChatStore.getState().isStreaming).toBe(false);
   });
 });

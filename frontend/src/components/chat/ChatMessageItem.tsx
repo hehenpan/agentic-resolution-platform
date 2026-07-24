@@ -83,7 +83,13 @@ const MessageContent: React.FC<MessageContentProps> = ({ content }) => {
 
 export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({ message }) => {
   const { userEmail } = useAuthStore();
-  const { activeChatSessionId, resumeSessionMessageStream } = useChatStore();
+  const { activeChatSessionId, sessionMessages, resumeSessionMessageStream } = useChatStore();
+
+  const currentMessages = activeChatSessionId ? (sessionMessages[activeChatSessionId] || []) : [];
+  const hasMsg = currentMessages.some((msg) => msg.id === message.id);
+  const isLatestMessage = hasMsg
+    ? currentMessages[currentMessages.length - 1]?.id === message.id
+    : true;
 
   const isUser = message.role === 'user';
   const isError = message.status === 'error';
@@ -163,6 +169,7 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({ message }) => 
               <InterruptTabCard
                 requestData={message.humanInputRequest}
                 onSubmit={handleInterruptSubmit}
+                disabled={!isLatestMessage}
               />
             )}
 

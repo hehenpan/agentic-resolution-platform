@@ -295,10 +295,11 @@ class AgentRunStream:
         projector = AgentRunProjector(thread_id=thread_id, run_id=run_id)
 
         try:
-            stream_kwargs: dict[str, object] = {}
-            if run_id:
-                stream_kwargs["run_id"] = run_id
-
+            # NOTE: run_id is intentionally NOT forwarded to runs.stream().
+            # RunsClient.stream() creates a new run; on resume it locates the
+            # interrupted state via the `checkpoint` parameter and provides the
+            # user's response through `command`.  The original run_id is only
+            # used by AgentRunProjector for internal tracking / correlation.
             raw_stream = self._client.runs.stream(
                 thread_id=thread_id,
                 assistant_id=assistant_id.value if hasattr(assistant_id, "value") else str(assistant_id),
@@ -308,7 +309,6 @@ class AgentRunStream:
                 stream_mode=AGENT_STREAM_MODES,
                 stream_subgraphs=True,
                 version="v2",
-                **stream_kwargs,
             )
 
             source_sequence = 0

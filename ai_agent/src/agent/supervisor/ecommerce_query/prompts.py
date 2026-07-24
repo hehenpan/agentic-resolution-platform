@@ -10,6 +10,11 @@ ECOMMERCE_QUERY_SYSTEM_PROMPT = PromptTemplate.from_template(
     "3. `get_ecommerce_order_details`: Fetch order details by order ID.\n"
     "4. `get_return_requests_by_order`: Fetch return details by order ID.\n"
     "5. `get_return_requests_by_customer`: Fetch return details by customer ID.\n\n"
+    "CRITICAL REQUIREMENT:\n"
+    "If the operator requests to query information but you lack the required parameters "
+    "(such as email, order ID, or customer ID), you MUST still call the corresponding tool "
+    "and omit the missing parameter (or set it to null/None) rather than responding in text. "
+    "This is necessary to allow the system to prompt the operator for the missing inputs.\n\n"
     "Respond with tool calls when query information is requested, or summarize the results of tool outputs."
 )
 
