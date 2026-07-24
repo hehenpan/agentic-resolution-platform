@@ -21,6 +21,7 @@ def init_db() -> None:
     """
     Initializes database tables by creating metadata.
     """
+    import models.db_models  # noqa: F401
     SQLModel.metadata.create_all(engine)
 
 
