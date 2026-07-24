@@ -4,7 +4,7 @@ import pytest
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langgraph.types import Command
 from mock_ecommerce_gateway import EcommerceGatewayMock
-from shared_common.schemas.ai_agent import AgentReturnReason, AgentItemCondition
+from shared_common.schemas.ai_agent import AgentReturnReason, AgentItemCondition, AgentOutputPartKind
 from shared_common.schemas.ai_agent.human_input_schemas import CreateReturnRequestInputModel
 from shared_common.schemas.ai_agent.outputs import ECommerceCreateReturnOutput
 from shared_common.schemas.ai_agent.schema_ids import AgentOutputSchemaId, HumanInputSchemaId
@@ -119,8 +119,9 @@ async def test_create_return_success_without_interrupt(monkeypatch) -> None:
     assert state_values["return_details"].customer_id == 101
     assert state_values["return_details"].reason_code == AgentReturnReason.DAMAGED
     assert state_values["return_details"].item_condition == AgentItemCondition.DAMAGED
-    assert len(result["outputs"]) == 1
+    assert len(result["outputs"]) == 2
     assert result["outputs"][0].parts[0].schema_id == AgentOutputSchemaId.ECOMMERCE_CREATE_RETURN_RESULT_V1.value
+    assert result["outputs"][1].parts[0].kind == AgentOutputPartKind.TEXT
 
 
 async def test_create_return_triggers_interrupt_and_resumes_with_structured_data(

@@ -6,7 +6,14 @@ from langchain_core.messages import SystemMessage, ToolMessage
 from langgraph.runtime import Runtime
 from langgraph.types import interrupt
 from pydantic import BaseModel, Field
-from shared_common.schemas.ai_agent import AgentOutput, StructuredDataPart, AgentReturnReason, AgentItemCondition, AgentOutputPartKind
+from shared_common.schemas.ai_agent import (
+    AgentOutput,
+    AgentOutputPartKind,
+    StructuredDataPart,
+    TextPart,
+    AgentReturnReason,
+    AgentItemCondition,
+)
 from shared_common.schemas.ai_agent.human_input import HumanInputRequest
 from shared_common.schemas.ai_agent.human_input_schemas import CreateReturnRequestInputModel
 from shared_common.schemas.ai_agent.outputs import (
@@ -316,3 +323,50 @@ async def execute_create_return(
         messages=[tool_msg],
     )
     return {k: v for k, v in update if k in update.model_fields_set}
+
+
+async def build_action_response(
+    state: EcommerceActionState,
+    runtime: Runtime[None] | None = None,
+) -> dict[str, Any]:
+    """Extract final text response from the latest LLM message and publish it as AgentOutput."""
+    execution_info = runtime.execution_info if runtime else None
+    task_id = execution_info.task_id if execution_info else "default-task-id"
+
+    latest_ai_msg = None
+    for msg in reversed(state.messages):
+        if msg.type == "ai":
+            latest_ai_msg = msg
+            break
+
+    response_text = ""
+    if latest_ai_msg:
+        if isinstance(latest_ai_msg.content, list):
+            response_text = "".join(
+                part.get("text", "")
+                for part in latest_ai_msg.content
+                if isinstance(part, dict) and "text" in part
+            )
+        else:
+            response_text = str(latest_ai_msg.content)
+
+    if not response_text:
+        response_text = "Turn completed."
+
+    agent_output = AgentOutput(
+        output_id=build_output_id(
+            identity_scope=task_id,
+            output_key=AgentOutputKey.ECOMMERCE_ACTION_FINAL_RESPONSE,
+        ),
+        parts=[
+            TextPart(
+                kind=AgentOutputPartKind.TEXT,
+                text=response_text,
+            )
+        ],
+    )
+
+    return {
+        "outputs": [agent_output]
+    }
+

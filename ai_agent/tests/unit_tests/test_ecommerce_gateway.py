@@ -123,7 +123,7 @@ async def test_gateway_maps_typed_operations_to_mcp_tools(
     assert client.calls == [
         (
             tool_name,
-            request_model.model_dump(mode="json"),
+            {"req": request_model.model_dump(mode="json")},
         )
     ]
 

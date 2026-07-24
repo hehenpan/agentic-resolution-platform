@@ -143,6 +143,92 @@ describe('chatStore', () => {
     expect(messages[1].content).toBe('Agent response');
   });
 
+  it('fetchSessionMessages maps structured data output and user resume messages correctly from history', async () => {
+    const mockItems = [
+      {
+        id: 3,
+        event_id: 'evt_103',
+        chat_session_id: 'cs_102',
+        thread_id: 'thread_2',
+        run_id: 'run_2',
+        sender_type: 1,
+        event_kind: 'user_resume',
+        sequence: 2,
+        payload_json: JSON.stringify({
+          kind: 'user_resume',
+          response_data: { email: 'john@example.com' },
+        }),
+        create_ts_ms: 1753236002000,
+      },
+      {
+        id: 2,
+        event_id: 'evt_102',
+        chat_session_id: 'cs_102',
+        thread_id: 'thread_2',
+        run_id: 'run_2',
+        sender_type: 2,
+        event_kind: 'agent.output_produced',
+        sequence: 1,
+        payload_json: JSON.stringify({
+          output: {
+            parts: [
+              {
+                kind: 'structured_data',
+                schema_id: 'ecommerce.user_result.v1',
+                data: { exists: true, user_id: 1001, email: 'john@example.com' },
+              },
+            ],
+          },
+        }),
+        create_ts_ms: 1753236001000,
+      },
+      {
+        id: 1,
+        event_id: 'evt_101',
+        chat_session_id: 'cs_102',
+        thread_id: 'thread_2',
+        run_id: 'run_2',
+        sender_type: 1,
+        event_kind: 'user_message',
+        sequence: 0,
+        payload_json: JSON.stringify({ content: 'User question' }),
+        create_ts_ms: 1753236000000,
+      },
+    ];
+
+    vi.spyOn(chatService, 'listSessionMessages').mockResolvedValueOnce({
+      code: 0,
+      message: 'Success',
+      data: {
+        has_more: false,
+        next_cursor: null,
+        items: mockItems,
+      },
+    });
+
+    await useChatStore.getState().fetchSessionMessages('cs_102');
+
+    const messages = useChatStore.getState().sessionMessages['cs_102'];
+    expect(messages).toHaveLength(3);
+
+    // User message
+    expect(messages[0].role).toBe('user');
+    expect(messages[0].content).toBe('User question');
+
+    // Structured data response
+    expect(messages[1].role).toBe('assistant');
+    expect(messages[1].content).toBe('');
+    expect(messages[1].structuredParts).toHaveLength(1);
+    expect(messages[1].structuredParts?.[0].kind).toBe('structured_data');
+    expect((messages[1].structuredParts?.[0] as any).schema_id).toBe('ecommerce.user_result.v1');
+    expect((messages[1].structuredParts?.[0] as any).data.user_id).toBe(1001);
+
+    // Resume message
+    expect(messages[2].role).toBe('user');
+    expect(messages[2].content).toBe('[Resume Form] email: john@example.com');
+  });
+
+
   it('sendMessageStream handles SSE stream events and error status', async () => {
     vi.spyOn(chatService, 'sendSessionMessageStream').mockImplementation(
       async (_sessionId, _content, onMessage, _onError, onClose) => {
