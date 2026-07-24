@@ -32,7 +32,7 @@ async def route_request(
         )
         model = llm.get_llm_model()
         router = model.with_structured_output(SupervisorDecision)
-        raw_decision = await router.ainvoke(prompt_value)
+        raw_decision = await router.ainvoke(prompt_value.to_messages())
         decision = SupervisorDecision.model_validate(raw_decision)
     except Exception as error:
         logger.error(

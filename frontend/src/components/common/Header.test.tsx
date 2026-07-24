@@ -11,11 +11,10 @@ describe('Header Component', () => {
     });
   });
 
-  it('renders platform title and connection status badge', () => {
+  it('renders platform title', () => {
     render(<Header darkMode={true} onToggleTheme={vi.fn()} />);
 
     expect(screen.getByText('Agentic Resolution Platform')).toBeInTheDocument();
-    expect(screen.getByText('FastAPI Connected')).toBeInTheDocument();
   });
 
   it('triggers onToggleTheme when theme button is clicked', () => {

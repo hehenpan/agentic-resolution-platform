@@ -73,9 +73,6 @@ export const WorkbenchPage: React.FC = () => {
           <h2 className="font-semibold text-foreground text-sm">
             {currentSessionMeta?.title || 'Resolution Chat Workspace'}
           </h2>
-          <p className="text-xs text-muted-foreground font-mono">
-            Session ID: {activeChatSessionId}
-          </p>
         </div>
         {isStreaming && (
           <div className="flex items-center space-x-2 text-xs font-mono text-emerald-400">
