@@ -1,33 +1,46 @@
+"""Shared embedding model interface and factory."""
+
 from abc import ABC, abstractmethod
-from typing import List
+
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
+
+from agent.core.constants import (
+    GEMINI_EMBEDDING_DIM,
+    GEMINI_EMBEDDING_MODEL,
+)
+
 
 class EmbeddingModel(ABC):
-    """
-    Abstract base class representing an embedding model interface.
-    """
+    """Define the asynchronous query embedding interface."""
+
     @abstractmethod
-    async def aembed_query(self, text: str) -> List[float]:
-        """
-        Asynchronously generates an embedding vector for a given text.
-        """
-        pass
+    async def aembed_query(self, text: str) -> list[float]:
+        """Generate an embedding vector for the supplied text."""
+        ...
 
 
 class GeminiEmbeddingModel(EmbeddingModel):
-    """
-    Concrete implementation of EmbeddingModel using Google's Gemini embeddings.
-    """
-    def __init__(self, model_name: str) -> None:
-        from langchain_google_genai import GoogleGenerativeAIEmbeddings
-        self.embeddings = GoogleGenerativeAIEmbeddings(model=model_name)
+    """Generate embeddings with Google's Gemini embedding API."""
 
-    async def aembed_query(self, text: str) -> List[float]:
+    def __init__(
+        self,
+        model_name: str,
+        output_dimensionality: int,
+    ) -> None:
+        """Initialize the provider adapter with an explicit vector dimension."""
+        self.embeddings = GoogleGenerativeAIEmbeddings(
+            model=model_name,
+            output_dimensionality=output_dimensionality,
+        )
+
+    async def aembed_query(self, text: str) -> list[float]:
+        """Generate a query embedding through the provider adapter."""
         return await self.embeddings.aembed_query(text)
 
 
 def get_embedding_model() -> EmbeddingModel:
-    """
-    Factory helper to retrieve the active embedding model implementation.
-    """
-    from agent.core.constants import GEMINI_EMBEDDING_MODEL
-    return GeminiEmbeddingModel(GEMINI_EMBEDDING_MODEL)
+    """Create the configured embedding model."""
+    return GeminiEmbeddingModel(
+        model_name=GEMINI_EMBEDDING_MODEL,
+        output_dimensionality=GEMINI_EMBEDDING_DIM,
+    )

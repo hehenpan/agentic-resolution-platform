@@ -278,9 +278,15 @@ class ChatService:
                     create_ts_ms=time.time() * 1000,
                 )
                 try:
-                    self.wrapper.save_chat_message(agent_msg)
+                    save_result = self.wrapper.save_chat_message(agent_msg)
+                    if not save_result.inserted:
+                        logger.info(
+                            f"Skipping duplicated agent event for SSE: "
+                            f"event_id={event.event_id}, event_kind={event.kind.value}"
+                        )
+                        continue
                 except Exception as e:
-                    logger.error(
+                    logger.exception(
                         f"Failed to save agent message to DB: event_id={event.event_id}, "
                         f"event_kind={event.kind.value}, error={e}"
                     )
@@ -510,9 +516,15 @@ class ChatService:
                 )
 
                 try:
-                    self.wrapper.save_chat_message(agent_msg)
+                    save_result = self.wrapper.save_chat_message(agent_msg)
+                    if not save_result.inserted:
+                        logger.info(
+                            f"Skipping duplicated agent event for SSE: "
+                            f"event_id={event.event_id}, event_kind={event.kind.value}"
+                        )
+                        continue
                 except Exception as e:
-                    logger.error(
+                    logger.exception(
                         f"Failed to save agent message to DB: event_id={event.event_id}, "
                         f"event_kind={event.kind.value}, error={e}"
                     )
@@ -547,6 +559,4 @@ class ChatService:
                 data={"detail": f"Stream resume error: {e}"},
             )
             yield err_event.to_sse_format()
-
-
 

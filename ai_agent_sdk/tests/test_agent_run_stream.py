@@ -324,6 +324,18 @@ async def test_create_run_and_join_stream_and_get_state_events() -> None:
     create_call = client.runs.calls[0]
     assert create_call["thread_id"] == "thread-reconnect"
     assert create_call["assistant_id"] == "supervisor_graph"
+    assert create_call["stream_mode"] == (
+        "values",
+        "messages",
+        "updates",
+        "events",
+        "tasks",
+        "checkpoints",
+        "debug",
+        "custom",
+        "messages-tuple",
+    )
+    assert create_call["stream_subgraphs"] is True
     create_input = create_call["input"]
     assert isinstance(create_input, BaseModel)
     assert create_input.model_dump() == {
@@ -351,7 +363,7 @@ async def test_create_run_and_join_stream_and_get_state_events() -> None:
         run_id="run-test-123",
     )
     state_events = [event async for event in stream.get_state_events(state_req)]
-    assert len(state_events) == 2
+    assert len(state_events) == 1
     assert state_events[0].run_id == "run-test-123"
 
 
@@ -370,4 +382,3 @@ async def test_list_runs() -> None:
     assert res.runs[0].thread_id == "thread-list-test"
     assert res.runs[0].status == "pending"
     assert res.runs[0].metadata == {"foo": "bar"}
-

@@ -110,3 +110,33 @@ async def test_supervisor_graph_routes_to_policy_qa_with_mock_llm(
     assert output.parts[1].sources
     assert fake_model.router.inputs
     assert fake_model.policy_inputs
+
+
+async def test_supervisor_graph_does_not_multiply_outputs_across_turns(
+    monkeypatch,
+    prebuilt_qdrant_env,
+) -> None:
+    route_record = _load_record("supervisor_route_real_llm_response.json")
+    policy_record = _load_record("policy_qa_real_llm_response.json")
+    fake_model = FakeSupervisorLLM(
+        route=route_record["route"],
+        draft=policy_record["draft"],
+    )
+    monkeypatch.setattr(llm, "get_llm_model", lambda: fake_model)
+    config = {
+        "configurable": {"thread_id": "supervisor-output-reducer-test"},
+    }
+
+    first_result = await supervisor_graph.ainvoke(
+        {"messages": [HumanMessage(content=route_record["question"])]},
+        config=config,
+    )
+    second_result = await supervisor_graph.ainvoke(
+        {"messages": [HumanMessage(content=route_record["question"])]},
+        config=config,
+    )
+
+    assert len(first_result["outputs"]) == 1
+    assert len(second_result["outputs"]) == 2
+    output_ids = [output.output_id for output in second_result["outputs"]]
+    assert len(output_ids) == len(set(output_ids))

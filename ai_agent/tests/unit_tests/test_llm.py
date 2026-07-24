@@ -24,4 +24,5 @@ def test_get_llm_model_creates_configured_model(monkeypatch) -> None:
 
     assert isinstance(first_model, FakeGoogleGenerativeAI)
     assert first_model.model == GEMINI_CHAT_MODEL
+    assert first_model.model == "gemini-3.1-flash-lite"
     assert second_model is not first_model

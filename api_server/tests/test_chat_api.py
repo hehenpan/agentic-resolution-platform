@@ -9,6 +9,7 @@ from app.models.models import (
     ChatThread,
     ThreadRun,
     ChatMessage,
+    ChatMessageSenderType as ModelChatMessageSenderType,
 )
 from app.schemas.chat import ChatSessionStatus
 from app.schemas.common import BizCode
@@ -491,6 +492,166 @@ def test_send_chat_message_sse_success(client, db_session: Session):
         client.app.dependency_overrides.pop(get_ai_agent_client, None)
 
 
+def test_send_chat_message_skips_duplicate_agent_event_id_sse(
+    client,
+    db_session: Session,
+):
+    """A duplicated agent event_id is treated as already streamed."""
+    login_user_client(client)
+    from utils.commons import generate_uuid_hex, get_current_ts
+
+    user = db_session.exec(select(User).where(User.email == TEST_USER_EMAIL)).first()
+    session_id = f"cs_{generate_uuid_hex()}"
+    db_session.add(
+        ChatSession(
+            chat_session_id=session_id,
+            tenant_id=user.tenant_id,
+            user_id=user.user_id,
+            title="Duplicate agent event",
+            status=ModelChatSessionStatus.ACTIVE,
+            create_ts=get_current_ts(),
+            update_ts=get_current_ts(),
+        )
+    )
+    db_session.commit()
+
+    run_id = f"run_{generate_uuid_hex()}"
+    thread_id = f"thread_{generate_uuid_hex()}"
+    duplicate_event = AgentOutputProduced(
+        event_id=f"evt_{generate_uuid_hex()}",
+        thread_id=thread_id,
+        run_id=run_id,
+        sequence=1,
+        created_at=get_current_ts(),
+        output=AgentOutput(
+            output_id=f"out_{generate_uuid_hex()}",
+            parts=[TextPart(text="This event was already delivered.")],
+        ),
+    )
+    completed_event = AgentRunCompleted(
+        event_id=f"evt_{generate_uuid_hex()}",
+        thread_id=thread_id,
+        run_id=run_id,
+        sequence=2,
+        created_at=get_current_ts(),
+        output_ids=[duplicate_event.output.output_id],
+    )
+    db_session.add(
+        ChatMessage(
+            event_id=duplicate_event.event_id,
+            chat_session_id=session_id,
+            thread_id=thread_id,
+            run_id=run_id,
+            sender_type=ModelChatMessageSenderType.AGENT,
+            event_kind=duplicate_event.kind.value,
+            sequence=duplicate_event.sequence,
+            payload_json=duplicate_event.model_dump_json(),
+            create_ts_ms=get_current_ts(),
+        )
+    )
+    db_session.commit()
+
+    mock_agent_client = DummyMockAIAgentClient(
+        run_id=run_id,
+        events=[duplicate_event, completed_event],
+    )
+    client.app.dependency_overrides[get_ai_agent_client] = lambda: mock_agent_client
+
+    try:
+        response = client.post(
+            f"https://testserver/api/v1/chat/sessions/{session_id}/messages",
+            json={"content": "Hello AI Assistant"},
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        blocks = [b.strip() for b in response.text.split("\n\n") if b.strip()]
+        assert len(blocks) == 1
+        assert blocks[0].split("\n")[0] == f"event: {completed_event.kind.value}"
+        data = json.loads(blocks[0].split("\n")[1][6:])
+        assert data["event_id"] == completed_event.event_id
+    finally:
+        client.app.dependency_overrides.pop(get_ai_agent_client, None)
+
+
+def test_send_chat_message_streams_agent_event_when_db_save_fails(
+    client,
+    db_session: Session,
+    monkeypatch,
+):
+    """Non-duplicate DB save failures still allow the SSE event to stream."""
+    login_user_client(client)
+    from utils.commons import generate_uuid_hex, get_current_ts
+
+    user = db_session.exec(select(User).where(User.email == TEST_USER_EMAIL)).first()
+    session_id = f"cs_{generate_uuid_hex()}"
+    db_session.add(
+        ChatSession(
+            chat_session_id=session_id,
+            tenant_id=user.tenant_id,
+            user_id=user.user_id,
+            title="Agent save failure",
+            status=ModelChatSessionStatus.ACTIVE,
+            create_ts=get_current_ts(),
+            update_ts=get_current_ts(),
+        )
+    )
+    db_session.commit()
+
+    run_id = f"run_{generate_uuid_hex()}"
+    thread_id = f"thread_{generate_uuid_hex()}"
+    output_event = AgentOutputProduced(
+        event_id=f"evt_{generate_uuid_hex()}",
+        thread_id=thread_id,
+        run_id=run_id,
+        sequence=1,
+        created_at=get_current_ts(),
+        output=AgentOutput(
+            output_id=f"out_{generate_uuid_hex()}",
+            parts=[TextPart(text="Still stream this event.")],
+        ),
+    )
+    completed_event = AgentRunCompleted(
+        event_id=f"evt_{generate_uuid_hex()}",
+        thread_id=thread_id,
+        run_id=run_id,
+        sequence=2,
+        created_at=get_current_ts(),
+        output_ids=[output_event.output.output_id],
+    )
+    original_save = ChatDBWrapper.save_chat_message
+
+    def fail_agent_output_save(
+        self: ChatDBWrapper,
+        message: ChatMessage,
+    ) -> object:
+        if message.event_id == output_event.event_id:
+            raise RuntimeError("database unavailable")
+        return original_save(self, message)
+
+    monkeypatch.setattr(ChatDBWrapper, "save_chat_message", fail_agent_output_save)
+    mock_agent_client = DummyMockAIAgentClient(
+        run_id=run_id,
+        events=[output_event, completed_event],
+    )
+    client.app.dependency_overrides[get_ai_agent_client] = lambda: mock_agent_client
+
+    try:
+        response = client.post(
+            f"https://testserver/api/v1/chat/sessions/{session_id}/messages",
+            json={"content": "Hello AI Assistant"},
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        blocks = [b.strip() for b in response.text.split("\n\n") if b.strip()]
+        assert len(blocks) == 2
+        first_data = json.loads(blocks[0].split("\n")[1][6:])
+        assert first_data["event_id"] == output_event.event_id
+        second_data = json.loads(blocks[1].split("\n")[1][6:])
+        assert second_data["event_id"] == completed_event.event_id
+    finally:
+        client.app.dependency_overrides.pop(get_ai_agent_client, None)
+
+
 def test_send_chat_message_does_not_stream_when_turn_persistence_fails(
     client,
     db_session: Session,
@@ -774,7 +935,4 @@ def test_project_human_input_schema_id_known_and_unknown():
     assert web_event.request.prompt == "Please provide user email"
     assert "properties" in web_event.request.input_schema
     assert "email" in web_event.request.input_schema["properties"]
-
-
-
 

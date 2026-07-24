@@ -111,6 +111,8 @@ class AgentRunStream:
             thread_id=request.thread_id,
             assistant_id=request.assistant_id,
             input=input_payload,
+            stream_mode=AGENT_STREAM_MODES,
+            stream_subgraphs=True,
         )
         if isinstance(run, dict):
             run_id = str(run.get("run_id") or run.get("id") or "")
@@ -238,6 +240,7 @@ class AgentRunStream:
             source_sequence = 0
             async for raw_event in raw_stream:
                 for event in projector.process(raw_event, source_sequence):
+                    logger.info(f"######## event kind:{event.kind} event_id:{event.event_id}")
                     yield event
                 source_sequence += 1
 
@@ -311,6 +314,7 @@ class AgentRunStream:
             source_sequence = 0
             async for raw_event in raw_stream:
                 for event in projector.process(raw_event, source_sequence):
+                    logger.info(f"event kind:{event.kind} event_id:{event.event_id}")
                     yield event
                 source_sequence += 1
 
@@ -323,4 +327,3 @@ class AgentRunStream:
         except Exception as error:
             for event in projector.fail(error):
                 yield event
-

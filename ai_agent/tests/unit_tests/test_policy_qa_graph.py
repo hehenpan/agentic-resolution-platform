@@ -86,6 +86,29 @@ async def test_policy_qa_graph_returns_draft_sources_and_metadata(
     assert output.parts[1].sources[0].title == chunks[0]["file_name"]
 
 
+async def test_policy_qa_graph_does_not_return_inherited_outputs(
+    monkeypatch,
+    prebuilt_qdrant_env,
+) -> None:
+    record = _load_recorded_policy_response()
+    fake_model = FakePolicyLLM(record["draft"])
+    monkeypatch.setattr(llm, "get_llm_model", lambda: fake_model)
+    inherited_output = AgentOutput(
+        output_id="11111111-1111-5111-8111-111111111111",
+        parts=[TextPart(text="Historical output")],
+    )
+
+    result = await policy_qa_graph.ainvoke(
+        {
+            "messages": [HumanMessage(content=record["question"])],
+            "outputs": [inherited_output],
+        },
+    )
+
+    assert len(result["outputs"]) == 1
+    assert result["outputs"][0].output_id != inherited_output.output_id
+
+
 async def test_policy_qa_graph_keeps_sources_when_llm_fails(
     monkeypatch,
     prebuilt_qdrant_env,

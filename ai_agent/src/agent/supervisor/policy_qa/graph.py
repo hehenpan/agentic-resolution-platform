@@ -11,10 +11,11 @@ from agent.supervisor.policy_qa.nodes import (
     route_after_retrieval,
 )
 from agent.supervisor.policy_qa.state import PolicyQAOutput, PolicyQAState
-from agent.supervisor.state import SupervisorGraphNames
+from agent.supervisor.state import SupervisorGraphNames, SupervisorSubgraphInput
 
 builder = StateGraph(
     PolicyQAState,
+    input_schema=SupervisorSubgraphInput,
     output_schema=PolicyQAOutput,
 )
 builder.add_node(PolicyQANodes.RETRIEVE_POLICY, retrieve_policy)

@@ -1,3 +1,6 @@
+from dataclasses import dataclass
+
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select, func, or_, and_
 from app.models.models import (
     ChatSession,
@@ -10,6 +13,13 @@ from app.models.models import (
 from utils.commons import generate_uuid_hex, get_current_ts
 from loguru import logger
 
+
+@dataclass(frozen=True)
+class SaveChatMessageResult:
+    """Result of persisting a chat message."""
+
+    message: ChatMessage
+    inserted: bool
 
 
 class ChatDBWrapper:
@@ -298,18 +308,9 @@ class ChatDBWrapper:
             )
             raise
 
-    def save_chat_message(self, message: ChatMessage) -> ChatMessage:
+    def save_chat_message(self, message: ChatMessage) -> SaveChatMessageResult:
         """Insert a ChatMessage record into database."""
         try:
-            existing = self.db.exec(
-                select(ChatMessage).where(ChatMessage.event_id == message.event_id)
-            ).first()
-            if existing:
-                logger.info(
-                    f"ChatMessage with event_id={message.event_id} already exists, returning existing."
-                )
-                return existing
-
             self.db.add(message)
             self.db.commit()
             self.db.refresh(message)
@@ -317,7 +318,37 @@ class ChatDBWrapper:
                 f"Successfully saved ChatMessage in DB: event_id={message.event_id}, "
                 f"event_kind={message.event_kind}, chat_session_id={message.chat_session_id}"
             )
-            return message
+            return SaveChatMessageResult(message=message, inserted=True)
+        except IntegrityError as e:
+            self.db.rollback()
+            logger.exception(
+                f"Database integrity error while saving ChatMessage: "
+                f"event_id={message.event_id}, event_kind={message.event_kind}, "
+                f"chat_session_id={message.chat_session_id}, error={e}"
+            )
+            try:
+                existing = self.db.exec(
+                    select(ChatMessage).where(ChatMessage.event_id == message.event_id)
+                ).first()
+            except Exception as lookup_error:
+                logger.exception(
+                    f"Database error while checking duplicate ChatMessage event_id: "
+                    f"event_id={message.event_id}, error={lookup_error}"
+                )
+                raise e from lookup_error
+
+            if existing is not None:
+                logger.info(
+                    f"Duplicate ChatMessage event_id detected; treating as already persisted: "
+                    f"event_id={message.event_id}, existing_id={existing.id}"
+                )
+                return SaveChatMessageResult(message=existing, inserted=False)
+
+            logger.error(
+                f"ChatMessage integrity error was not an event_id uniqueness conflict: "
+                f"event_id={message.event_id}"
+            )
+            raise e
         except Exception as e:
             self.db.rollback()
             logger.exception(
@@ -349,5 +380,4 @@ class ChatDBWrapper:
                 f"thread_id={thread_id}, error={e}"
             )
             raise e
-
 

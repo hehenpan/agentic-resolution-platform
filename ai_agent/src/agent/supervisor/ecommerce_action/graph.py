@@ -14,7 +14,7 @@ from agent.supervisor.ecommerce_action.state import (
     EcommerceActionOutput,
     EcommerceActionState,
 )
-from agent.supervisor.state import SupervisorGraphNames
+from agent.supervisor.state import SupervisorGraphNames, SupervisorSubgraphInput
 
 
 class EcommerceActionNodeNames(str, Enum):
@@ -50,6 +50,7 @@ def route_after_action(state: EcommerceActionState) -> RouteAfterActionRoute:
 
 builder = StateGraph(
     EcommerceActionState,
+    input_schema=SupervisorSubgraphInput,
     output_schema=EcommerceActionOutput,
 )
 builder.add_node(EcommerceActionNodeNames.ACTION_AGENT.value, action_agent)
