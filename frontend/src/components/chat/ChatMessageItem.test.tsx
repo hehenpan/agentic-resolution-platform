@@ -41,4 +41,36 @@ describe('ChatMessageItem Component', () => {
     expect(screen.getByText('Tool Execution Log')).toBeInTheDocument();
     expect(screen.getByText('fn: refund_api()')).toBeInTheDocument();
   });
+
+  it('renders markdown content as formatted HTML for text messages', () => {
+    const agentMsg: ChatMessage = {
+      id: 'msg_3',
+      role: 'assistant',
+      content: '## Refund Summary\n\n- Status: **approved**\n- Amount: `$100`',
+      timestamp: new Date().toISOString(),
+    };
+
+    render(<ChatMessageItem message={agentMsg} />);
+
+    expect(screen.getByRole('heading', { name: 'Refund Summary', level: 2 })).toBeInTheDocument();
+    expect(screen.getByText('approved').tagName).toBe('STRONG');
+    expect(screen.getByText('$100').tagName).toBe('CODE');
+    expect(screen.queryByText('## Refund Summary')).not.toBeInTheDocument();
+  });
+
+  it('renders a spinner instead of an empty assistant message bubble while waiting for first response', () => {
+    const pendingAgentMsg: ChatMessage = {
+      id: 'msg_4',
+      role: 'assistant',
+      content: '',
+      timestamp: new Date().toISOString(),
+      status: 'streaming',
+    };
+
+    render(<ChatMessageItem message={pendingAgentMsg} />);
+
+    expect(screen.getByLabelText('Waiting for assistant response')).toBeInTheDocument();
+    expect(screen.getByText('Agent Assistant')).toBeInTheDocument();
+    expect(screen.queryByText('Failed to send or process message')).not.toBeInTheDocument();
+  });
 });
