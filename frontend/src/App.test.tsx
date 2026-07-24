@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import { describe, it, expect, beforeEach } from 'vitest';
+import { MemoryRouter } from 'react-router-dom';
 import App from './App';
 import { useAuthStore } from './store/authStore';
 import { removeCookie, setCookie } from './utils/cookie';
@@ -16,7 +17,11 @@ describe('App Component', () => {
   });
 
   it('renders login prompt modal when unauthenticated (no sessionid cookie)', () => {
-    render(<App />);
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <App />
+      </MemoryRouter>
+    );
     expect(screen.getByText('Agentic Platform Sign In')).toBeInTheDocument();
     expect(screen.queryByText('New Session')).not.toBeInTheDocument();
   });
@@ -25,7 +30,11 @@ describe('App Component', () => {
     setCookie('sessionid', 'valid_session_123');
     useAuthStore.setState({ isAuthenticated: true, userEmail: 'user@example.com' });
 
-    render(<App />);
+    render(
+      <MemoryRouter initialEntries={['/chat']}>
+        <App />
+      </MemoryRouter>
+    );
     expect(screen.queryByText('Agentic Platform Sign In')).not.toBeInTheDocument();
     expect(screen.getByText('New Session')).toBeInTheDocument();
   });

@@ -1,5 +1,6 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { MemoryRouter } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { useChatStore } from '../../store/chatStore';
 
@@ -17,7 +18,11 @@ describe('Sidebar Component', () => {
     const fetchSpy = vi.fn();
     useChatStore.setState({ fetchSessions: fetchSpy });
 
-    render(<Sidebar />);
+    render(
+      <MemoryRouter>
+        <Sidebar />
+      </MemoryRouter>
+    );
 
     expect(screen.getByText('New Session')).toBeInTheDocument();
     expect(fetchSpy).toHaveBeenCalledTimes(1);
@@ -42,7 +47,11 @@ describe('Sidebar Component', () => {
       setActiveChatSession: setActiveSpy,
     });
 
-    render(<Sidebar />);
+    render(
+      <MemoryRouter>
+        <Sidebar />
+      </MemoryRouter>
+    );
 
     const sessionItem = screen.getByText('Customer Refund Resolution');
     expect(sessionItem).toBeInTheDocument();
@@ -55,7 +64,11 @@ describe('Sidebar Component', () => {
     const createSpy = vi.fn().mockResolvedValue('cs_999');
     useChatStore.setState({ createSession: createSpy });
 
-    render(<Sidebar />);
+    render(
+      <MemoryRouter>
+        <Sidebar />
+      </MemoryRouter>
+    );
 
     const newBtn = screen.getByRole('button', { name: /New Session/i });
     fireEvent.click(newBtn);

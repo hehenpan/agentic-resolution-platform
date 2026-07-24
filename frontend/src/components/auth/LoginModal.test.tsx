@@ -1,5 +1,6 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { MemoryRouter } from 'react-router-dom';
 import { LoginModal } from './LoginModal';
 import { useAuthStore } from '../../store/authStore';
 
@@ -14,7 +15,11 @@ describe('LoginModal Component', () => {
   });
 
   it('renders login prompt title and inputs', () => {
-    render(<LoginModal />);
+    render(
+      <MemoryRouter>
+        <LoginModal />
+      </MemoryRouter>
+    );
 
     expect(screen.getByText('Agentic Platform Sign In')).toBeInTheDocument();
     expect(screen.getByPlaceholderText('user@example.com')).toBeInTheDocument();
@@ -22,7 +27,11 @@ describe('LoginModal Component', () => {
   });
 
   it('shows validation error when fields are empty', async () => {
-    render(<LoginModal />);
+    render(
+      <MemoryRouter>
+        <LoginModal />
+      </MemoryRouter>
+    );
 
     const submitBtn = screen.getByRole('button', { name: /Sign In/i });
     fireEvent.click(submitBtn);
@@ -34,7 +43,11 @@ describe('LoginModal Component', () => {
     const loginSpy = vi.fn().mockResolvedValue(true);
     useAuthStore.setState({ login: loginSpy });
 
-    render(<LoginModal />);
+    render(
+      <MemoryRouter>
+        <LoginModal />
+      </MemoryRouter>
+    );
 
     const emailInput = screen.getByPlaceholderText('user@example.com');
     const passwordInput = screen.getByPlaceholderText('••••••••');

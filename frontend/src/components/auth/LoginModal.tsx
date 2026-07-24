@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Bot, Lock, Mail, ArrowRight, AlertCircle } from 'lucide-react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../store/authStore';
 
 export const LoginModal: React.FC = () => {
@@ -8,6 +9,8 @@ export const LoginModal: React.FC = () => {
   const [validationError, setValidationError] = useState('');
 
   const { login, isLoading, error: authError, clearError } = useAuthStore();
+  const location = useLocation();
+  const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -23,7 +26,12 @@ export const LoginModal: React.FC = () => {
       return;
     }
 
-    await login({ email: email.trim(), password: password.trim() });
+    const success = await login({ email: email.trim(), password: password.trim() });
+    if (success) {
+      const stateFrom = (location.state as { from?: { pathname: string } } | null)?.from?.pathname;
+      const targetPath = stateFrom || '/chat';
+      navigate(targetPath, { replace: true });
+    }
   };
 
   const displayError = validationError || authError;
