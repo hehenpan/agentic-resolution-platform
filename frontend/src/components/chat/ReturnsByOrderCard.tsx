@@ -1,5 +1,5 @@
 import React from 'react';
-import { RotateCcw, Calendar, AlertCircle, FileCheck, HelpCircle } from 'lucide-react';
+import { RotateCcw, Calendar, FileCheck, HelpCircle } from 'lucide-react';
 import type { ECommerceReturnsByOrderOutput } from '../../types/chat';
 
 interface ReturnsByOrderCardProps {

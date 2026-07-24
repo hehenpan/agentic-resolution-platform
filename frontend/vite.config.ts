@@ -315,6 +315,71 @@ function apiMockPlugin(): Plugin {
               return;
             }
 
+            if (normalizedContent === 'dedupe-order-test') {
+              const duplicateEventId = `evt_mock_${now}_dedupe`;
+              const firstOutputText = '[Mock SSE Stream] First deduped response.';
+              const duplicateOutputText = '[Mock SSE Stream] Duplicate response should be ignored.';
+              const createdAt = Math.floor((now + 300) / 1000);
+              const agentMsgItem = {
+                id: mockMessageStore[chatSessionId].length + 1,
+                event_id: duplicateEventId,
+                chat_session_id: chatSessionId,
+                thread_id: `thread_${chatSessionId}`,
+                run_id: `run_${now}`,
+                sender_type: 2,
+                event_kind: 'agent.output_produced',
+                sequence: mockMessageStore[chatSessionId].length,
+                payload_json: JSON.stringify({ output: { parts: [{ kind: 'text', text: firstOutputText }] } }),
+                create_ts_ms: now + 300,
+              };
+
+              setTimeout(() => {
+                mockMessageStore[chatSessionId].push(agentMsgItem);
+                res.write(
+                  `event: agent.output_produced\ndata: ${JSON.stringify({
+                    event_id: duplicateEventId,
+                    kind: 'agent.output_produced',
+                    thread_id: `thread_${chatSessionId}`,
+                    run_id: `run_${now}`,
+                    sequence: 1,
+                    created_at: createdAt,
+                    output: {
+                      output_id: `out_mock_${now}_dedupe`,
+                      parts: [{ kind: 'text', text: firstOutputText }],
+                    },
+                  })}\n\n`
+                );
+
+                res.write(
+                  `event: agent.output_produced\ndata: ${JSON.stringify({
+                    event_id: duplicateEventId,
+                    kind: 'agent.output_produced',
+                    thread_id: `thread_${chatSessionId}`,
+                    run_id: `run_${now}`,
+                    sequence: 2,
+                    created_at: createdAt + 1,
+                    output: {
+                      output_id: `out_mock_${now}_dedupe`,
+                      parts: [{ kind: 'text', text: duplicateOutputText }],
+                    },
+                  })}\n\n`
+                );
+
+                res.write(
+                  `event: agent.run_completed\ndata: ${JSON.stringify({
+                    event_id: `evt_mock_${now}_c`,
+                    kind: 'agent.run_completed',
+                    thread_id: `thread_${chatSessionId}`,
+                    run_id: `run_${now}`,
+                    sequence: 3,
+                    created_at: createdAt + 2,
+                  })}\n\n`
+                );
+                res.end();
+              }, 300);
+              return;
+            }
+
             const agentOutputText = `[Mock SSE Stream] Received message: "${content}"`;
             const agentMsgItem = {
               id: mockMessageStore[chatSessionId].length + 1,
@@ -335,8 +400,13 @@ function apiMockPlugin(): Plugin {
                 `event: agent.output_produced\ndata: ${JSON.stringify({
                   event_id: agentMsgItem.event_id,
                   kind: 'agent.output_produced',
+                  thread_id: `thread_${chatSessionId}`,
+                  run_id: `run_${now}`,
+                  sequence: 1,
+                  created_at: Math.floor((now + 300) / 1000),
                   output: {
-                    parts: [{ text: agentOutputText }],
+                    output_id: `out_mock_${now}`,
+                    parts: [{ kind: 'text', text: agentOutputText }],
                   },
                 })}\n\n`
               );
@@ -345,6 +415,10 @@ function apiMockPlugin(): Plugin {
                 `event: agent.run_completed\ndata: ${JSON.stringify({
                   event_id: `evt_mock_${now}_c`,
                   kind: 'agent.run_completed',
+                  thread_id: `thread_${chatSessionId}`,
+                  run_id: `run_${now}`,
+                  sequence: 2,
+                  created_at: Math.floor((now + 400) / 1000),
                 })}\n\n`
               );
               res.end();
@@ -375,8 +449,6 @@ function apiMockPlugin(): Plugin {
               // fallback
             }
 
-            const match = url.match(/\/api\/v1\/chat\/sessions\/([^/]+)\/resume/);
-            const chatSessionId = match ? match[1] : 'cs_mock_default';
             const now = Date.now();
             const schemaId = resumeReq.schema_id || 'human_input.get_user.v1';
             const resumePayload = resumeReq.resume_payload || {};

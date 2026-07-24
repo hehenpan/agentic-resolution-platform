@@ -1,5 +1,5 @@
 import React from 'react';
-import { CheckCircle2, AlertCircle, Calendar, PlusCircle, Tag } from 'lucide-react';
+import { CheckCircle2, AlertCircle, Calendar, Tag } from 'lucide-react';
 import type { ECommerceCreateReturnOutput } from '../../types/chat';
 
 interface CreateReturnResultCardProps {

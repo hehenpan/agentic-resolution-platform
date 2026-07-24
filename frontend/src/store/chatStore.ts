@@ -4,6 +4,8 @@ import type {
   ChatMessage,
   ChatMessageItem,
   InterruptEventData,
+  WebAgentOutputPart,
+  WebHumanInputRequestedData,
 } from '../types/chat';
 import { chatService } from '../services/chatService';
 
@@ -61,6 +63,142 @@ const getHistoryMessageContent = (item: ChatMessageItem): string => {
   return getFirstOutputText(parsed) ?? item.payload_json;
 };
 
+const parseTimestampMs = (value: unknown): number | null => {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value > 1_000_000_000_000 ? value : value * 1000;
+  }
+
+  if (typeof value !== 'string' || !value.trim()) {
+    return null;
+  }
+
+  const numericValue = Number(value);
+  if (Number.isFinite(numericValue)) {
+    return numericValue > 1_000_000_000_000 ? numericValue : numericValue * 1000;
+  }
+
+  const parsedDate = Date.parse(value);
+  return Number.isFinite(parsedDate) ? parsedDate : null;
+};
+
+const getEventId = (data: Record<string, unknown>): string | null => {
+  const eventId = data.event_id;
+  return typeof eventId === 'string' && eventId.trim() ? eventId : null;
+};
+
+const getEventTimestamp = (data: Record<string, unknown>): string => {
+  const timestampMs =
+    parseTimestampMs(data.created_at) ??
+    parseTimestampMs(data.create_ts_ms) ??
+    parseTimestampMs(data.timestamp) ??
+    Date.now();
+
+  return new Date(timestampMs).toISOString();
+};
+
+const getCurrentMessageTimestamp = (): string => {
+  return new Date(Math.floor(Date.now() / 1000) * 1000).toISOString();
+};
+
+const getMessageTimestampMs = (message: ChatMessage): number => {
+  const timestampMs = Date.parse(message.timestamp);
+  return Number.isFinite(timestampMs) ? timestampMs : 0;
+};
+
+const hasDisplayedEventId = (messages: ChatMessage[], eventId: string): boolean => {
+  return messages.some((message) => message.id === eventId || message.eventId === eventId);
+};
+
+const sortMessagesChronologically = (messages: ChatMessage[]): ChatMessage[] => {
+  return messages
+    .map((message, index) => ({ message, index }))
+    .sort((left, right) => {
+      const timeDiff = getMessageTimestampMs(left.message) - getMessageTimestampMs(right.message);
+      if (timeDiff !== 0) {
+        return timeDiff;
+      }
+      return left.index - right.index;
+    })
+    .map(({ message }) => message);
+};
+
+const dedupeAndSortMessages = (messages: ChatMessage[]): ChatMessage[] => {
+  const seenEventIds = new Set<string>();
+  const uniqueMessages: ChatMessage[] = [];
+
+  for (const message of messages) {
+    const eventId = message.eventId ?? message.id;
+    if (eventId && seenEventIds.has(eventId)) {
+      continue;
+    }
+    if (eventId) {
+      seenEventIds.add(eventId);
+    }
+    uniqueMessages.push(message);
+  }
+
+  return sortMessagesChronologically(uniqueMessages);
+};
+
+const appendMessageChronologically = (
+  messages: ChatMessage[],
+  message: ChatMessage
+): ChatMessage[] => {
+  if (hasDisplayedEventId(messages, message.eventId ?? message.id)) {
+    return messages;
+  }
+
+  return sortMessagesChronologically([...messages, message]);
+};
+
+const getOutputParts = (data: Record<string, unknown>): unknown[] => {
+  const output = data.output;
+  if (!output || typeof output !== 'object' || !('parts' in output)) {
+    return [];
+  }
+
+  const parts = (output as { parts?: unknown }).parts;
+  return Array.isArray(parts) ? parts : [];
+};
+
+const getAssistantOutputUpdate = (
+  data: Record<string, unknown>
+): Pick<AssistantStreamEventUpdate, 'contentDelta' | 'structuredParts'> => {
+  const parts = getOutputParts(data);
+  let contentDelta = '';
+  const structuredParts: WebAgentOutputPart[] = [];
+
+  for (const part of parts) {
+    if (!part || typeof part !== 'object') {
+      continue;
+    }
+
+    const candidate = part as { kind?: unknown; text?: unknown };
+    if ((!candidate.kind || candidate.kind === 'text') && typeof candidate.text === 'string') {
+      contentDelta += candidate.text;
+    } else if (candidate.kind === 'structured_data') {
+      structuredParts.push(part as WebAgentOutputPart);
+    }
+  }
+
+  if (!contentDelta && typeof data.content === 'string') {
+    contentDelta = data.content;
+  } else if (!contentDelta && typeof data.text === 'string') {
+    contentDelta = data.text;
+  }
+
+  return { contentDelta, structuredParts };
+};
+
+interface AssistantStreamEventUpdate {
+  eventId: string | null;
+  timestamp: string;
+  contentDelta?: string;
+  structuredParts?: WebAgentOutputPart[];
+  humanInputRequest?: WebHumanInputRequestedData;
+  status?: ChatMessage['status'];
+}
+
 interface ChatStoreState {
   sessions: ChatSessionMeta[];
   sessionMessages: Record<string, ChatMessage[]>;
@@ -86,6 +224,11 @@ interface ChatStoreState {
   setMessageStatus: (chatSessionId: string, messageId: string, status: ChatMessage['status']) => void;
   setHumanInputRequest: (chatSessionId: string, messageId: string, humanInputReq: any) => void;
   addStructuredPart: (chatSessionId: string, messageId: string, part: any) => void;
+  applyAssistantStreamEvent: (
+    chatSessionId: string,
+    placeholderMessageId: string,
+    update: AssistantStreamEventUpdate
+  ) => boolean;
   setStreaming: (isStreaming: boolean) => void;
   setActiveInterrupt: (interrupt: InterruptEventData | null) => void;
 }
@@ -175,6 +318,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
 
           return {
             id: item.event_id || `msg_${item.id || Date.now()}`,
+            eventId: item.event_id,
             role,
             content: textContent,
             timestamp: new Date(item.create_ts_ms).toISOString(),
@@ -185,7 +329,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
         set((state) => ({
           sessionMessages: {
             ...state.sessionMessages,
-            [chatSessionId]: mappedMessages.reverse(),
+            [chatSessionId]: dedupeAndSortMessages(mappedMessages),
           },
         }));
       }
@@ -208,7 +352,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       id: userMsgId,
       role: 'user',
       content,
-      timestamp: new Date().toISOString(),
+      timestamp: getCurrentMessageTimestamp(),
       status: 'completed',
     };
 
@@ -216,7 +360,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       id: agentMsgId,
       role: 'assistant',
       content: '',
-      timestamp: new Date().toISOString(),
+      timestamp: getCurrentMessageTimestamp(),
       status: 'streaming',
     };
 
@@ -230,7 +374,16 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
         content,
         (event, data) => {
           if (event === 'agent.human_input_requested' || event === 'human_input_requested') {
-            const reqData = data as any;
+            const reqData = data as unknown as WebHumanInputRequestedData;
+            const applied = get().applyAssistantStreamEvent(chatSessionId, agentMsgId, {
+              eventId: getEventId(data),
+              timestamp: getEventTimestamp(data),
+              humanInputRequest: reqData,
+              status: 'interrupted',
+            });
+            if (!applied) {
+              return;
+            }
             const interruptObj: InterruptEventData = {
               interrupt_id: reqData.interrupt_id || `int_${Date.now()}`,
               thread_id: reqData.thread_id || `thread_${chatSessionId}`,
@@ -239,23 +392,15 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
               request: reqData.request,
             };
             get().setActiveInterrupt(interruptObj);
-            get().setHumanInputRequest(chatSessionId, agentMsgId, reqData);
-            get().setMessageStatus(chatSessionId, agentMsgId, 'interrupted');
           } else if (event === 'agent.output_produced' || event === 'output_produced') {
-            const output = data.output as { parts?: Array<any> } | undefined;
-            if (output?.parts && Array.isArray(output.parts)) {
-              for (const part of output.parts) {
-                if ((!part.kind || part.kind === 'text') && part.text) {
-                  get().updateMessageContent(chatSessionId, agentMsgId, part.text);
-                } else if (part.kind === 'structured_data') {
-                  get().addStructuredPart(chatSessionId, agentMsgId, part);
-                }
-              }
-            } else if (typeof data.content === 'string') {
-              get().updateMessageContent(chatSessionId, agentMsgId, data.content);
-            } else if (typeof data.text === 'string') {
-              get().updateMessageContent(chatSessionId, agentMsgId, data.text);
-            }
+            const outputUpdate = getAssistantOutputUpdate(data);
+            get().applyAssistantStreamEvent(chatSessionId, agentMsgId, {
+              eventId: getEventId(data),
+              timestamp: getEventTimestamp(data),
+              contentDelta: outputUpdate.contentDelta,
+              structuredParts: outputUpdate.structuredParts,
+              status: 'streaming',
+            });
           } else if (event === 'agent.run_completed' || event === 'run_completed') {
             get().setMessageStatus(chatSessionId, agentMsgId, 'completed');
             set({ activeInterrupt: null });
@@ -316,7 +461,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       id: userMsgId,
       role: 'user',
       content: userText,
-      timestamp: new Date().toISOString(),
+      timestamp: getCurrentMessageTimestamp(),
       status: 'completed',
     };
 
@@ -324,7 +469,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       id: agentMsgId,
       role: 'assistant',
       content: '',
-      timestamp: new Date().toISOString(),
+      timestamp: getCurrentMessageTimestamp(),
       status: 'streaming',
     };
 
@@ -345,18 +490,14 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
         },
         (event, data) => {
           if (event === 'agent.output_produced' || event === 'output_produced') {
-            const output = data.output as { parts?: Array<any> } | undefined;
-            if (output?.parts && Array.isArray(output.parts)) {
-              for (const part of output.parts) {
-                if (part.kind === 'text' && part.text) {
-                  get().updateMessageContent(chatSessionId, agentMsgId, part.text);
-                } else if (part.kind === 'structured_data') {
-                  get().addStructuredPart(chatSessionId, agentMsgId, part);
-                }
-              }
-            } else if (typeof data.content === 'string') {
-              get().updateMessageContent(chatSessionId, agentMsgId, data.content);
-            }
+            const outputUpdate = getAssistantOutputUpdate(data);
+            get().applyAssistantStreamEvent(chatSessionId, agentMsgId, {
+              eventId: getEventId(data),
+              timestamp: getEventTimestamp(data),
+              contentDelta: outputUpdate.contentDelta,
+              structuredParts: outputUpdate.structuredParts,
+              status: 'streaming',
+            });
           } else if (event === 'agent.run_completed' || event === 'run_completed') {
             get().setMessageStatus(chatSessionId, agentMsgId, 'completed');
           } else if (event === 'error') {
@@ -390,7 +531,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       return {
         sessionMessages: {
           ...state.sessionMessages,
-          [chatSessionId]: [...currentMsgs, message],
+          [chatSessionId]: appendMessageChronologically(currentMsgs, message),
         },
       };
     });
@@ -462,6 +603,71 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
         },
       };
     });
+  },
+
+  applyAssistantStreamEvent: (
+    chatSessionId: string,
+    placeholderMessageId: string,
+    update: AssistantStreamEventUpdate
+  ): boolean => {
+    let applied = false;
+
+    set((state) => {
+      const currentMsgs = state.sessionMessages[chatSessionId] || [];
+      if (update.eventId && hasDisplayedEventId(currentMsgs, update.eventId)) {
+        return state;
+      }
+
+      const placeholderIndex = currentMsgs.findIndex(
+        (message) =>
+          message.id === placeholderMessageId &&
+          (!message.eventId || message.eventId === update.eventId)
+      );
+      const contentDelta = update.contentDelta ?? '';
+      const structuredParts = update.structuredParts ?? [];
+
+      const applyUpdate = (message: ChatMessage): ChatMessage => ({
+        ...message,
+        eventId: update.eventId ?? message.eventId,
+        timestamp: update.timestamp,
+        content: message.content + contentDelta,
+        status: update.status ?? message.status,
+        humanInputRequest: update.humanInputRequest ?? message.humanInputRequest,
+        structuredParts:
+          structuredParts.length > 0
+            ? [...(message.structuredParts || []), ...structuredParts]
+            : message.structuredParts,
+      });
+
+      const nextMessages =
+        placeholderIndex >= 0
+          ? currentMsgs.map((message, index) =>
+              index === placeholderIndex ? applyUpdate(message) : message
+            )
+          : [
+              ...currentMsgs,
+              {
+                id: update.eventId ?? `agent_${Date.now()}`,
+                eventId: update.eventId ?? undefined,
+                role: 'assistant' as const,
+                content: contentDelta,
+                timestamp: update.timestamp,
+                status: update.status ?? 'streaming',
+                humanInputRequest: update.humanInputRequest,
+                structuredParts: structuredParts.length > 0 ? structuredParts : undefined,
+              },
+            ];
+
+      applied = true;
+      return {
+        sessionMessages: {
+          ...state.sessionMessages,
+          [chatSessionId]: sortMessagesChronologically(nextMessages),
+        },
+      };
+    });
+
+    return applied;
   },
 
   setStreaming: (isStreaming: boolean) => set({ isStreaming }),

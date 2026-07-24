@@ -1,5 +1,5 @@
 import React from 'react';
-import { FileText, Calendar, DollarSign, Tag, ShoppingBag, AlertCircle } from 'lucide-react';
+import { FileText, Calendar, DollarSign, ShoppingBag, AlertCircle } from 'lucide-react';
 import type { ECommerceOrderDetailsOutput, ECommerceOrderItemOutput } from '../../types/chat';
 
 interface OrderDetailsCardProps {
