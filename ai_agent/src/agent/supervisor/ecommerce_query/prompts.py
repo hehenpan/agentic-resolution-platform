@@ -41,3 +41,17 @@ CUSTOMER_ID_EXTRACTION_PROMPT = PromptTemplate.from_template(
     "{user_text}\n\n"
     "Extracted Customer ID:"
 )
+
+
+ECOMMERCE_QUERY_SUMMARIZER_PROMPT = PromptTemplate.from_template(
+    "You are a helpful customer service assistant.\n"
+    "The customer service operator asked: \"{query}\"\n"
+    "The system retrieved the following data from the database:\n"
+    "{data}\n\n"
+    "Please provide a polite, natural language response summarizing this information for the operator.\n"
+    "Follow these formatting guidelines:\n"
+    "- Start with a polite greeting acknowledging the retrieval.\n"
+    "- List the key-value details using markdown bullet points with bold keys (e.g., \"* **Name:** John Doe\").\n"
+    "- End with a polite closing statement asking if they need anything else."
+)
+

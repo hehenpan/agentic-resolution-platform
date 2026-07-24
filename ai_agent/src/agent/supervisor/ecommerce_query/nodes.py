@@ -686,6 +686,17 @@ async def retrieve_returns_by_customer(
     return {k: v for k, v in update if k in update.model_fields_set}
 
 
+def _extract_message_text(content: str | list[Any]) -> str:
+    """Safely extract plain text from an LLM message content field (which can be a string or list of dicts)."""
+    if isinstance(content, list):
+        return "".join(
+            part.get("text", "")
+            for part in content
+            if isinstance(part, dict) and "text" in part
+        )
+    return str(content)
+
+
 async def build_query_response(
     state: EcommerceQueryState,
     runtime: Runtime[None] | None = None,
@@ -694,22 +705,54 @@ async def build_query_response(
     execution_info = runtime.execution_info if runtime else None
     task_id = execution_info.task_id if execution_info else "default-task-id"
 
-    latest_ai_msg = None
-    for msg in reversed(state.messages):
-        if msg.type == "ai":
-            latest_ai_msg = msg
-            break
+    # Collect any retrieved data from the state
+    data_dict = {}
+    if state.user_output is not None:
+        data_dict["user_info"] = state.user_output.model_dump(mode="json")
+    if state.orders_output is not None:
+        data_dict["orders"] = state.orders_output.model_dump(mode="json")
+    if state.order_details_output is not None:
+        data_dict["order_details"] = state.order_details_output.model_dump(mode="json")
+    if state.returns_by_order_output is not None:
+        data_dict["returns_by_order"] = state.returns_by_order_output.model_dump(mode="json")
+    if state.returns_by_customer_output is not None:
+        data_dict["returns_by_customer"] = state.returns_by_customer_output.model_dump(mode="json")
 
     response_text = ""
-    if latest_ai_msg:
-        if isinstance(latest_ai_msg.content, list):
-            response_text = "".join(
-                part.get("text", "")
-                for part in latest_ai_msg.content
-                if isinstance(part, dict) and "text" in part
+    # If we have retrieved data, generate a natural language summary using the dedicated LLM
+    if data_dict:
+        try:
+            from agent.supervisor.ecommerce_query.prompts import ECOMMERCE_QUERY_SUMMARIZER_PROMPT
+
+            # Find the first user message as the query
+            query_text = ""
+            for msg in state.messages:
+                if msg.type == "human":
+                    query_text = str(msg.content)
+                    break
+
+            from langchain_core.messages import HumanMessage
+            formatted_prompt = ECOMMERCE_QUERY_SUMMARIZER_PROMPT.format(
+                query=query_text,
+                data=str(data_dict)
             )
-        else:
-            response_text = str(latest_ai_msg.content)
+
+            pure_model = llm.get_llm_model()
+            summary_response = await pure_model.ainvoke([HumanMessage(content=formatted_prompt)])
+            response_text = _extract_message_text(summary_response.content)
+        except Exception as error:
+            logger.exception("Failed to generate response summary via LLM: {}", error)
+
+    # Fallback to copying from the latest AI message if no data retrieved or if LLM summary failed
+    if not response_text:
+        latest_ai_msg = None
+        for msg in reversed(state.messages):
+            if msg.type == "ai":
+                latest_ai_msg = msg
+                break
+
+        if latest_ai_msg:
+            response_text = _extract_message_text(latest_ai_msg.content)
 
     if not response_text:
         response_text = "Turn completed."
