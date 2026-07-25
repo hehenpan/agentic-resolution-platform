@@ -260,3 +260,6 @@ data/
 data/*
 deploy/data
 deploy/data/*
+
+./playwright-cli
+./playwright-cli/*

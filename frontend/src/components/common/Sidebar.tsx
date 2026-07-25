@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Plus, MessageSquare, Loader2, Settings, MessageCircle, FileText, Users, Database } from 'lucide-react';
+import { Plus, MessageSquare, Loader2, Settings, MessageCircle, FileText } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useChatStore } from '../../store/chatStore';
 import { useAuthStore } from '../../store/authStore';
@@ -135,4 +135,3 @@ export const Sidebar: React.FC = () => {
     </aside>
   );
 };
-

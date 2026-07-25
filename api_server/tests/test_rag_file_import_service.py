@@ -248,8 +248,7 @@ async def test_import_file_marks_valid_completed_result_as_synced(
     assert result.file_name == FILE_NAME
     assert _sync_status(db_session) == FileSyncStatus.SYNCED
     thread_id = client.requests[0].thread_id
-    assert thread_id.startswith("rag-file-import:")
-    UUID(thread_id.removeprefix("rag-file-import:"))
+    UUID(thread_id)
 
 
 @pytest.mark.anyio
@@ -442,14 +441,13 @@ async def test_import_file_does_not_retry_failed_file_without_policy(
     assert client.requests == []
 
 
-def test_thread_id_is_a_prefixed_uuid() -> None:
+def test_thread_id_is_a_langgraph_compatible_uuid() -> None:
     thread_id = build_rag_file_import_thread_id(
         file_id=FILE_ID,
         operation_id="operation-1",
     )
 
-    assert thread_id.startswith("rag-file-import:")
-    UUID(thread_id.removeprefix("rag-file-import:"))
+    UUID(thread_id)
 
 
 def test_thread_id_rejects_empty_operation_id() -> None:

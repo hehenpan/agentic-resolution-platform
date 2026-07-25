@@ -38,7 +38,7 @@ def build_rag_file_import_thread_id(
     file_id: int,
     operation_id: str,
 ) -> str:
-    """Build a thread ID using the current millisecond identity seed."""
+    """Build a LangGraph-compatible UUID thread ID for one file import."""
     if not operation_id.strip():
         logger.error(
             f"RAG file import operation ID is empty: file_id={file_id}"
@@ -48,7 +48,7 @@ def build_rag_file_import_thread_id(
     timestamp_ms = _unix_time_ms()
     seed = f"{file_id}:{operation_id}:{timestamp_ms}"
     thread_uuid = uuid5(RAG_FILE_IMPORT_THREAD_NAMESPACE, seed)
-    return f"rag-file-import:{thread_uuid}"
+    return str(thread_uuid)
 
 
 class RAGFileImportError(RuntimeError):

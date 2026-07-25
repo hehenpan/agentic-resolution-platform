@@ -22,6 +22,23 @@ def test_rag_file_import_payload_is_exported_by_ai_agent_package() -> None:
     assert restored == payload
 
 
+def test_rag_file_import_payload_json_serializes_binary_content_as_base64() -> None:
+    payload = RAGFileImportPayload(
+        file_id=1,
+        file_name="policy.pdf",
+        file_size=4,
+        file_owner_id=2,
+        file_tenant_id=3,
+        file_content=b"\xffpdf",
+    )
+
+    dumped = payload.model_dump(mode="json")
+    restored = RAGFileImportPayload.model_validate(dumped)
+
+    assert dumped["file_content"] == "_3BkZg=="
+    assert restored.file_content == b"\xffpdf"
+
+
 def test_rag_file_import_payload_rejects_non_json_metadata() -> None:
     with pytest.raises(ValidationError):
         RAGFileImportPayload(

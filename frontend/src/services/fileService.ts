@@ -1,5 +1,42 @@
 import { request } from './httpClient';
-import type { FileListResponse, FileUploadResponse } from '../types/files';
+import type { FileItemResponse, FileListResponse, FileUploadResponse } from '../types/files';
+
+type RawFileItemResponse = FileItemResponse & {
+  filename?: string;
+};
+
+type RawFileUploadResponse = FileUploadResponse & {
+  data: FileUploadResponse['data'] & {
+    filename?: string;
+  };
+};
+
+function normalizeFileItem(item: RawFileItemResponse): FileItemResponse {
+  return {
+    ...item,
+    file_name: item.file_name || item.filename || '',
+  };
+}
+
+function normalizeFileListResponse(response: FileListResponse): FileListResponse {
+  return {
+    ...response,
+    data: {
+      ...response.data,
+      items: response.data.items.map((item) => normalizeFileItem(item)),
+    },
+  };
+}
+
+function normalizeFileUploadResponse(response: RawFileUploadResponse): FileUploadResponse {
+  return {
+    ...response,
+    data: {
+      ...response.data,
+      file_name: response.data.file_name || response.data.filename || '',
+    },
+  };
+}
 
 export const fileService = {
   /**
@@ -11,9 +48,10 @@ export const fileService = {
     if (cursor) {
       params.append('cursor', cursor);
     }
-    return request<FileListResponse>(`/api/v1/files?${params.toString()}`, {
+    const response = await request<FileListResponse>(`/api/v1/files?${params.toString()}`, {
       method: 'GET',
     });
+    return normalizeFileListResponse(response);
   },
 
   /**
@@ -24,9 +62,10 @@ export const fileService = {
     const formData = new FormData();
     formData.append('file', file);
 
-    return request<FileUploadResponse>('/api/v1/files/upload', {
+    const response = await request<RawFileUploadResponse>('/api/v1/files/upload', {
       method: 'POST',
       body: formData,
     });
+    return normalizeFileUploadResponse(response);
   },
 };

@@ -71,7 +71,8 @@ class FakeRunsClient:
 class FakeThreadsClient:
     def __init__(self, state: dict[str, object]) -> None:
         self.state = state
-        self.calls: list[tuple[str, bool]] = []
+        self.create_calls: list[tuple[str | None, str | None]] = []
+        self.state_calls: list[tuple[str, bool]] = []
 
     async def create(
         self,
@@ -79,6 +80,7 @@ class FakeThreadsClient:
         if_exists: str | None = None,
         **kwargs: object,
     ) -> dict[str, object]:
+        self.create_calls.append((thread_id, if_exists))
         return {"thread_id": thread_id or "thread-created"}
 
     async def get_state(
@@ -87,7 +89,7 @@ class FakeThreadsClient:
         *,
         subgraphs: bool,
     ) -> dict[str, object]:
-        self.calls.append((thread_id, subgraphs))
+        self.state_calls.append((thread_id, subgraphs))
         return self.state
 
 
@@ -180,7 +182,8 @@ async def test_stream_turn_calls_v2_supervisor_and_yields_only_domain_events() -
             }
         ]
     }
-    assert client.threads.calls == [("thread-1", True)]
+    assert client.threads.create_calls == [("thread-1", "do_nothing")]
+    assert client.threads.state_calls == [("thread-1", True)]
 
 
 @pytest.mark.anyio
@@ -219,6 +222,7 @@ async def test_resume_turn_uses_interrupt_and_resume_cursor() -> None:
         "checkpoint_ns": "supervisor",
         "checkpoint_map": {"root": "checkpoint-root"},
     }
+    assert client.threads.create_calls == []
 
 
 @pytest.mark.anyio
@@ -270,10 +274,13 @@ async def test_stream_rag_file_import_uses_file_ingest_assistant() -> None:
     call = client.runs.calls[0]
     assert call["thread_id"] == request.thread_id
     assert call["assistant_id"] == AgentAssistantId.FILE_INGEST.value
-    assert call["input"] == request.payload
+    assert call["input"] == request.payload.model_dump(mode="json")
+    assert isinstance(call["input"], dict)
+    assert call["input"]["file_content"] == "cG9saWN5"
     assert call["command"] is None
     assert call["checkpoint"] is None
-    assert client.threads.calls == [(request.thread_id, True)]
+    assert client.threads.create_calls == [(request.thread_id, "do_nothing")]
+    assert client.threads.state_calls == [(request.thread_id, True)]
 
 
 @pytest.mark.anyio
@@ -298,7 +305,8 @@ async def test_stream_failure_yields_failed_domain_event_without_final_state() -
 
     assert len(events) == 1
     assert events[0].kind == "agent.run_failed"
-    assert client.threads.calls == []
+    assert client.threads.create_calls == [("thread-1", "do_nothing")]
+    assert client.threads.state_calls == []
 
 
 @pytest.mark.anyio
