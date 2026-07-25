@@ -1,6 +1,6 @@
 """Requests accepted by AI Agent service operations."""
 
-from pydantic import BaseModel, Field, JsonValue
+from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
 from shared_common.schemas.ai_agent.enums import AgentRunStatus
 from shared_common.schemas.ai_agent.human_input import (
@@ -113,6 +113,11 @@ class AgentGetStateEventsRequest(BaseModel):
 class RAGFileImportPayload(BaseModel):
     """Request ingestion of one file into the agent RAG store."""
 
+    model_config = ConfigDict(
+        ser_json_bytes="base64",
+        val_json_bytes="base64",
+    )
+
     file_id: int = Field(..., description="Unique file ID")
     file_name: str = Field(..., description="Name of the file")
     file_size: int = Field(..., description="Size of the file in bytes")
@@ -178,4 +183,3 @@ class AgentListRunsResponse(BaseModel):
         default_factory=list,
         description="List of agent runs on the thread.",
     )
-

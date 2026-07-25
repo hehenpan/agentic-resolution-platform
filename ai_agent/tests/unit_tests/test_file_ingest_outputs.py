@@ -42,6 +42,21 @@ def _state(status: str | None = "success") -> FileIngestState:
     )
 
 
+def test_file_ingest_state_decodes_json_safe_base64_file_content() -> None:
+    state = FileIngestState.model_validate(
+        {
+            "file_id": 123,
+            "file_name": "policy.pdf",
+            "file_size": 4,
+            "file_owner_id": 10,
+            "file_tenant_id": 20,
+            "file_content": "_3BkZg==",
+        }
+    )
+
+    assert state.file_content == b"\xffpdf"
+
+
 def test_build_rag_file_import_output_maps_structured_result() -> None:
     output = build_rag_file_import_output(
         identity_scope=IDENTITY_SCOPE,

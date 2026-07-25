@@ -3,6 +3,8 @@ import { Settings, ShieldCheck, UploadCloud, Trash2, Loader2, FileText, CheckCir
 import { fileService } from '../services/fileService';
 import type { FileItemResponse } from '../types/files';
 
+const SUPPORTED_FILE_EXTENSIONS = new Set(['txt', 'md', 'pdf']);
+
 /** Format bytes to human-readable KB/MB/GB */
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -21,6 +23,11 @@ function formatTimestamp(ts: number): string {
     hour: '2-digit',
     minute: '2-digit',
   });
+}
+
+function isSupportedUploadFile(fileName: string): boolean {
+  const extension = fileName.split('.').pop()?.toLowerCase();
+  return Boolean(extension && SUPPORTED_FILE_EXTENSIONS.has(extension));
 }
 
 /** Render sync status badge */
@@ -91,6 +98,13 @@ export const ManagementPage: React.FC = () => {
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    if (!isSupportedUploadFile(file.name)) {
+      setUploadSuccess(null);
+      setUploadError('Unsupported file format. Only txt, md, and pdf are allowed.');
+      e.target.value = '';
+      return;
+    }
 
     setIsUploading(true);
     setUploadSuccess(null);

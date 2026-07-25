@@ -2,7 +2,7 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ManagementPage } from './ManagementPage';
 import * as fileServiceModule from '../services/fileService';
-import type { FileListResponse, FileUploadResponse } from '../types/files';
+import type { FileItemResponse, FileListResponse, FileUploadResponse } from '../types/files';
 
 // Mock the fileService module
 vi.mock('../services/fileService', () => ({
@@ -85,6 +85,29 @@ describe('ManagementPage Component', () => {
     await waitFor(() => {
       expect(screen.getByText('policy_doc.pdf')).toBeInTheDocument();
       expect(screen.getByText('readme.md')).toBeInTheDocument();
+    });
+  });
+
+  it('renders file_name from the API contract instead of filename', async () => {
+    const itemWithLegacyFilename: FileItemResponse & { filename: string } = {
+      ...mockFileListResponse.data.items[0],
+      file_name: 'contract_file_name.md',
+      filename: 'legacy_filename_should_not_render.md',
+    };
+    const responseWithLegacyFilename = {
+      ...mockFileListResponse,
+      data: {
+        ...mockFileListResponse.data,
+        items: [itemWithLegacyFilename],
+      },
+    };
+    mockListFiles.mockResolvedValueOnce(responseWithLegacyFilename);
+
+    render(<ManagementPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('contract_file_name.md')).toBeInTheDocument();
+      expect(screen.queryByText('legacy_filename_should_not_render.md')).not.toBeInTheDocument();
     });
   });
 
@@ -189,5 +212,24 @@ describe('ManagementPage Component', () => {
     await waitFor(() => {
       expect(screen.getByText('File "new_file.txt" uploaded successfully.')).toBeInTheDocument();
     });
+  });
+
+  it('rejects unsupported file formats before calling upload API', async () => {
+    mockListFiles.mockResolvedValueOnce(mockFileListResponse);
+
+    render(<ManagementPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('policy_doc.pdf')).toBeInTheDocument();
+    });
+
+    const fileInput = screen.getByTestId('file-input') as HTMLInputElement;
+    const testFile = new File(['test content'], 'spreadsheet.csv', { type: 'text/csv' });
+    fireEvent.change(fileInput, { target: { files: [testFile] } });
+
+    await waitFor(() => {
+      expect(screen.getByText('Unsupported file format. Only txt, md, and pdf are allowed.')).toBeInTheDocument();
+    });
+    expect(mockUploadFile).not.toHaveBeenCalled();
   });
 });

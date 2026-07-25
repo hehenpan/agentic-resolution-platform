@@ -250,8 +250,7 @@ async def test_local_task_maps_message_and_consumes_stream(
     assert session_calls == 1
     assert len(client.requests) == 1
     request = client.requests[0]
-    assert request.thread_id.startswith("rag-file-import:")
-    UUID(request.thread_id.removeprefix("rag-file-import:"))
+    UUID(request.thread_id)
     assert request.payload.file_content == b"policy"
     assert request.payload.file_owner_id == OWNER_ID
     assert request.payload.file_tenant_id == TENANT_ID

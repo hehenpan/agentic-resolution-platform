@@ -35,6 +35,7 @@ def upload_file_helper(client, filename: str, file_content: bytes, expected_stat
         assert res_data["code"] == BizCode.SUCCESS
         assert res_data["message"] == "File uploaded successfully"
         assert res_data["data"]["file_name"] == filename
+        assert "filename" not in res_data["data"]
         assert res_data["data"]["file_size"] == len(file_content)
     logger.info(f"file uploaded: {response.json()}")    
     return response
@@ -166,6 +167,7 @@ def test_list_files_pagination(client, db_session: Session):
     for i in range(10):
         item = retrieved_items[i]
         assert item["file_name"] == f"test_list_file_{9 - i}.txt"
+        assert "filename" not in item
         assert item["owner_email"] == TEST_TENANT_ADMIN_EMAIL
         assert "owner_user_id" in item
 

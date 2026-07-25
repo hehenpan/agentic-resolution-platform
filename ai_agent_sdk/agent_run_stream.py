@@ -209,7 +209,7 @@ class AgentRunStream:
         request: AgentRAGFileImportRequest,
     ) -> AsyncIterator[AgentDomainEvent]:
         """Stream one RAG file import operation."""
-        input_payload: Input = request.payload
+        input_payload: Input = request.payload.model_dump(mode="json")
         return self._stream(
             thread_id=request.thread_id,
             assistant_id=AgentAssistantId.FILE_INGEST,
@@ -295,6 +295,12 @@ class AgentRunStream:
         projector = AgentRunProjector(thread_id=thread_id, run_id=run_id)
 
         try:
+            if checkpoint is None:
+                await self._client.threads.create(
+                    thread_id=thread_id,
+                    if_exists="do_nothing",
+                )
+
             # NOTE: run_id is intentionally NOT forwarded to runs.stream().
             # RunsClient.stream() creates a new run; on resume it locates the
             # interrupted state via the `checkpoint` parameter and provides the
