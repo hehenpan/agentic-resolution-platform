@@ -1,5 +1,5 @@
 import React from 'react';
-import { Bot, User, Wrench, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
+import { Bot, User, Wrench, CheckCircle2, AlertCircle, Loader2, FileText, ExternalLink } from 'lucide-react';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type {
@@ -10,6 +10,7 @@ import type {
   ECommerceReturnsByOrderOutput,
   ECommerceReturnsByCustomerOutput,
   ECommerceCreateReturnOutput,
+  WebSourceReference,
 } from '../../types/chat';
 import { useAuthStore } from '../../store/authStore';
 import { useChatStore } from '../../store/chatStore';
@@ -81,6 +82,135 @@ const MessageContent: React.FC<MessageContentProps> = ({ content }) => {
   );
 };
 
+interface SourceReferencesProps {
+  sources: WebSourceReference[];
+}
+
+const getSourceFileId = (source: WebSourceReference): number | null => {
+  if (typeof source.file_id === 'number') {
+    return source.file_id;
+  }
+
+  const payload = source.attributes?.payload;
+  if (!payload || typeof payload !== 'object') {
+    return null;
+  }
+
+  const payloadFileId = (payload as { file_id?: unknown }).file_id;
+  if (typeof payloadFileId === 'number') {
+    return payloadFileId;
+  }
+
+  if (typeof payloadFileId === 'string' && payloadFileId.trim()) {
+    const parsedFileId = Number(payloadFileId);
+    return Number.isFinite(parsedFileId) ? parsedFileId : null;
+  }
+
+  return null;
+};
+
+const getSourceDisplayName = (source: WebSourceReference): string => {
+  return source.title || `Source ${source.source_id}`;
+};
+
+const getSourceFileName = (source: WebSourceReference): string | null => {
+  if (source.title?.trim()) {
+    return source.title.trim();
+  }
+
+  const payload = source.attributes?.payload;
+  if (!payload || typeof payload !== 'object') {
+    return null;
+  }
+
+  const payloadFileName = (payload as { file_name?: unknown }).file_name;
+  return typeof payloadFileName === 'string' && payloadFileName.trim()
+    ? payloadFileName.trim()
+    : null;
+};
+
+const dedupeSourcesForDisplay = (sources: WebSourceReference[]): WebSourceReference[] => {
+  const seenKeys = new Set<string>();
+  const dedupedSources: WebSourceReference[] = [];
+
+  for (const source of sources) {
+    const fileId = getSourceFileId(source);
+    const fileName = getSourceFileName(source);
+    const dedupeKey =
+      fileName !== null
+        ? `name:${fileName.toLowerCase()}`
+        : fileId === null
+        ? `source:${source.source_id}`
+        : `file:${fileId}`;
+
+    if (seenKeys.has(dedupeKey)) {
+      continue;
+    }
+
+    seenKeys.add(dedupeKey);
+    dedupedSources.push(source);
+  }
+
+  return dedupedSources;
+};
+
+const SourceReferences: React.FC<SourceReferencesProps> = ({ sources }) => {
+  const displaySources = dedupeSourcesForDisplay(sources);
+
+  if (displaySources.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="mt-3 border-t border-border/50 pt-3 text-left">
+      <div className="mb-2 text-xs font-semibold uppercase tracking-normal text-muted-foreground">
+        References
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {displaySources.map((source) => {
+          const label = getSourceDisplayName(source);
+          const fileId = getSourceFileId(source);
+          const key = `${source.source_id}-${fileId ?? label}`;
+          const hasFileId = fileId !== null;
+          const content = (
+            <>
+              <FileText className="h-3.5 w-3.5 shrink-0" />
+              <span className="min-w-0 truncate">{label}</span>
+              {hasFileId ? <ExternalLink className="h-3 w-3 shrink-0" /> : null}
+            </>
+          );
+
+          if (hasFileId) {
+            return (
+              <a
+                key={key}
+                href={`/api/v1/files/${fileId}`}
+                target="_blank"
+                rel="noreferrer"
+                title={`Preview ${label}`}
+                data-testid={`source-preview-${fileId}`}
+                className="inline-flex max-w-full items-center gap-1.5 rounded-md border border-border bg-muted/40 px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted"
+              >
+                {content}
+              </a>
+            );
+          }
+
+          return (
+            <span
+              key={key}
+              title={label}
+              className="inline-flex max-w-full items-center gap-1.5 rounded-md border border-border bg-muted/30 px-2.5 py-1.5 text-xs font-medium text-muted-foreground"
+            >
+              {content}
+            </span>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
 export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({ message }) => {
   const { userEmail } = useAuthStore();
   const { activeChatSessionId, sessionMessages, resumeSessionMessageStream } = useChatStore();
@@ -97,7 +227,8 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({ message }) => 
   const hasVisibleAssistantPayload =
     Boolean(message.content) ||
     Boolean(message.humanInputRequest) ||
-    Boolean(message.structuredParts && message.structuredParts.length > 0);
+    Boolean(message.structuredParts && message.structuredParts.length > 0) ||
+    Boolean(message.sourceParts && message.sourceParts.some((part) => part.sources.length > 0));
   const isWaitingForAssistantResponse =
     !isUser && message.status === 'streaming' && !hasVisibleAssistantPayload;
 
@@ -196,6 +327,10 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({ message }) => 
                   return null;
                 })}
               </div>
+            )}
+
+            {!isUser && message.sourceParts && message.sourceParts.length > 0 && (
+              <SourceReferences sources={message.sourceParts.flatMap((part) => part.sources)} />
             )}
 
             {/* Render Tool Calls if present */}

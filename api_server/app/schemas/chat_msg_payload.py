@@ -188,6 +188,7 @@ class WebStructuredDataPart(BaseModel):
 class WebSourceReference(BaseModel):
     """Web frontend source reference schema."""
     source_id: str = Field(..., description="Source identifier.")
+    file_id: int | None = Field(default=None, description="Uploaded file identifier for preview.")
     source_type: str = Field(..., description="Category of system supplying the source.")
     title: str | None = Field(default=None, description="Human-readable label for the source.")
     uri: str | None = Field(default=None, description="Location URI of the source.")

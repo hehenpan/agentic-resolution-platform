@@ -208,6 +208,7 @@ class ChatEventProjector:
             sources_list = [
                 WebSourceReference(
                     source_id=src.source_id,
+                    file_id=src.file_id,
                     source_type=str(src.source_type),
                     title=src.title,
                     uri=src.uri,

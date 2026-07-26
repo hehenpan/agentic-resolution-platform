@@ -297,7 +297,21 @@ export interface WebStructuredDataPart {
     | Record<string, unknown>;
 }
 
-export type WebAgentOutputPart = WebTextPart | WebStructuredDataPart;
+export interface WebSourceReference {
+  source_id: string;
+  file_id?: number | null;
+  source_type: string;
+  title?: string | null;
+  uri?: string | null;
+  attributes?: Record<string, unknown>;
+}
+
+export interface WebSourcesPart {
+  kind: 'sources';
+  sources: WebSourceReference[];
+}
+
+export type WebAgentOutputPart = WebTextPart | WebStructuredDataPart | WebSourcesPart;
 
 export interface WebAgentOutput {
   output_id: string;
@@ -319,6 +333,7 @@ export interface ChatMessage {
   }>;
   humanInputRequest?: WebHumanInputRequestedData | null;
   structuredParts?: WebAgentOutputPart[];
+  sourceParts?: WebSourcesPart[];
 }
 
 export interface ChatSSEEvent<T = Record<string, unknown>> {
@@ -351,4 +366,3 @@ export interface ChatSession {
   status: AgentRunStatus;
   activeInterrupt?: InterruptEventData | null;
 }
-

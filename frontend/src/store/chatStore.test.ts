@@ -143,6 +143,60 @@ describe('chatStore', () => {
     expect(messages[1].content).toBe('Agent response');
   });
 
+  it('fetchSessionMessages keeps source references from history output parts', async () => {
+    vi.spyOn(chatService, 'listSessionMessages').mockResolvedValueOnce({
+      code: 0,
+      message: 'Success',
+      data: {
+        has_more: false,
+        next_cursor: null,
+        items: [
+          {
+            id: 1,
+            event_id: 'evt_sources',
+            chat_session_id: 'cs_sources',
+            thread_id: 'thread_1',
+            run_id: 'run_1',
+            sender_type: 2,
+            event_kind: 'agent.output_produced',
+            sequence: 0,
+            payload_json: JSON.stringify({
+              kind: 'agent.output_produced',
+              output: {
+                parts: [
+                  { kind: 'text', text: 'Policy answer' },
+                  {
+                    kind: 'sources',
+                    sources: [
+                      {
+                        source_id: 'point_1',
+                        file_id: 123,
+                        source_type: 'policy_rag',
+                        title: 'returns.md',
+                      },
+                    ],
+                  },
+                ],
+              },
+            }),
+            create_ts_ms: 1753236000000,
+          },
+        ],
+      },
+    });
+
+    await useChatStore.getState().fetchSessionMessages('cs_sources');
+
+    const messages = useChatStore.getState().sessionMessages.cs_sources;
+    expect(messages[0].sourceParts?.[0].sources[0]).toEqual(
+      expect.objectContaining({
+        source_id: 'point_1',
+        file_id: 123,
+        title: 'returns.md',
+      })
+    );
+  });
+
   it('fetchSessionMessages filters out agent.run_failed and agent.run_interrupted items', async () => {
     const mockItems = [
       {

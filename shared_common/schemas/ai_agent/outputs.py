@@ -43,6 +43,13 @@ class SourceReference(BaseModel):
     source_id: str = Field(
         description="Stable provider-specific identifier for the referenced source."
     )
+    file_id: int | None = Field(
+        default=None,
+        description=(
+            "Optional uploaded file identifier when the source maps to an "
+            "api_server managed file."
+        ),
+    )
     source_type: AgentSourceType = Field(
         description="Category of system that supplied the source."
     )
