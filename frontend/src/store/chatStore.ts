@@ -234,6 +234,7 @@ interface ChatStoreState {
   // Actions
   fetchSessions: () => Promise<void>;
   createSession: (title?: string) => Promise<string | null>;
+  deleteSession: (chatSessionId: string) => Promise<boolean>;
   fetchSessionMessages: (chatSessionId: string) => Promise<void>;
   sendMessageStream: (chatSessionId: string, content: string) => Promise<void>;
   resumeSessionMessageStream: (
@@ -324,6 +325,39 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
         },
       }));
       return newSessionId;
+    }
+  },
+
+  deleteSession: async (chatSessionId: string): Promise<boolean> => {
+    try {
+      const res = await chatService.deleteSession(chatSessionId);
+      if (res.code !== 0) {
+        set({ error: res.message || 'Failed to delete chat session' });
+        return false;
+      }
+
+      set((state) => {
+        const nextSessions = state.sessions.filter(
+          (session) => session.chat_session_id !== chatSessionId
+        );
+        const nextSessionMessages = { ...state.sessionMessages };
+        delete nextSessionMessages[chatSessionId];
+        const shouldReplaceActive = state.activeChatSessionId === chatSessionId;
+
+        return {
+          sessions: nextSessions,
+          sessionMessages: nextSessionMessages,
+          activeChatSessionId: shouldReplaceActive
+            ? nextSessions[0]?.chat_session_id ?? null
+            : state.activeChatSessionId,
+          activeInterrupt: shouldReplaceActive ? null : state.activeInterrupt,
+          error: null,
+        };
+      });
+      return true;
+    } catch (err: unknown) {
+      set({ error: err instanceof Error ? err.message : 'Failed to delete chat session' });
+      return false;
     }
   },
 

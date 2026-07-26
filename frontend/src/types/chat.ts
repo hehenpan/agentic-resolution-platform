@@ -46,6 +46,12 @@ export interface ChatSessionListResponse {
   data: ChatSessionListResponseData;
 }
 
+export interface DeleteChatSessionResponse {
+  code: number;
+  message: string;
+  data: Record<string, never>;
+}
+
 export interface UserMessageInput {
   content: string;
   metadata?: Record<string, unknown>;

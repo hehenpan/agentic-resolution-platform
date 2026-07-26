@@ -82,6 +82,30 @@ describe('chatService', () => {
     expect(result).toEqual(mockResponse);
   });
 
+  it('calls DELETE /api/v1/chat/sessions/{chat_session_id} when deleteSession is called', async () => {
+    const mockResponse = {
+      code: 0,
+      message: 'Chat session deleted successfully',
+      data: {},
+    };
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => mockResponse,
+      })
+    );
+
+    const result = await chatService.deleteSession('cs_1001');
+
+    expect(fetch).toHaveBeenCalledWith('/api/v1/chat/sessions/cs_1001', expect.objectContaining({
+      method: 'DELETE',
+    }));
+    expect(result).toEqual(mockResponse);
+  });
+
   it('calls GET /api/v1/chat/sessions/{chat_session_id}/messages when listSessionMessages is called', async () => {
     const mockResponse = {
       code: 0,
@@ -312,5 +336,4 @@ describe('chatService', () => {
     expect(onClose).toHaveBeenCalled();
   });
 });
-
 

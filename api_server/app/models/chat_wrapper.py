@@ -193,6 +193,56 @@ class ChatDBWrapper:
             )
             raise e
 
+    def get_active_chat_session_by_session_id(
+        self,
+        chat_session_id: str,
+    ) -> ChatSession | None:
+        """Query an active ChatSession by chat_session_id only."""
+        try:
+            query_stmt = select(ChatSession).where(
+                ChatSession.chat_session_id == chat_session_id,
+                ChatSession.status != ChatSessionStatus.INVALID,
+            )
+            return self.db.exec(query_stmt).first()
+        except Exception as e:
+            logger.exception(
+                f"Database error while querying ChatSession meta: chat_session_id={chat_session_id}, error={e}"
+            )
+            raise e
+
+    def soft_delete_chat_session(
+        self,
+        chat_session_id: str,
+        tenant_id: int,
+        user_id: int,
+    ) -> bool:
+        """Soft delete a ChatSession by marking it INVALID."""
+        try:
+            chat_session = self.get_chat_session_by_id(
+                chat_session_id=chat_session_id,
+                tenant_id=tenant_id,
+                user_id=user_id,
+            )
+            if not chat_session:
+                return False
+
+            chat_session.status = ChatSessionStatus.INVALID
+            chat_session.update_ts = get_current_ts()
+            self.db.add(chat_session)
+            self.db.commit()
+            logger.info(
+                f"Successfully soft deleted ChatSession: chat_session_id={chat_session_id}, "
+                f"tenant_id={tenant_id}, user_id={user_id}"
+            )
+            return True
+        except Exception as e:
+            self.db.rollback()
+            logger.exception(
+                f"Database error while soft deleting ChatSession: chat_session_id={chat_session_id}, "
+                f"tenant_id={tenant_id}, user_id={user_id}, error={e}"
+            )
+            raise e
+
     def get_latest_thread_by_session(self, chat_session_id: str) -> ChatThread | None:
         """
         Query the latest ChatThread record for a session using index
@@ -380,4 +430,3 @@ class ChatDBWrapper:
                 f"thread_id={thread_id}, error={e}"
             )
             raise e
-

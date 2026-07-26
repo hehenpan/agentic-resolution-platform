@@ -60,6 +60,42 @@ describe('Sidebar Component', () => {
     expect(setActiveSpy).toHaveBeenCalledWith('cs_101');
   });
 
+  it('triggers deleteSession from a session delete button without selecting the session', async () => {
+    const deleteSpy = vi.fn().mockResolvedValue(true);
+    const setActiveSpy = vi.fn();
+    useChatStore.setState({
+      sessions: [
+        {
+          id: 1,
+          chat_session_id: 'cs_101',
+          tenant_id: 1,
+          user_id: 10,
+          title: 'Customer Refund Resolution',
+          status: 1,
+          create_ts: 1753236000,
+          update_ts: 1753236000,
+        },
+      ],
+      activeChatSessionId: null,
+      deleteSession: deleteSpy,
+      setActiveChatSession: setActiveSpy,
+    });
+
+    render(
+      <MemoryRouter>
+        <Sidebar />
+      </MemoryRouter>
+    );
+
+    const deleteButton = screen.getByRole('button', { name: /Delete Customer Refund Resolution/i });
+    fireEvent.click(deleteButton);
+
+    await waitFor(() => {
+      expect(deleteSpy).toHaveBeenCalledWith('cs_101');
+    });
+    expect(setActiveSpy).not.toHaveBeenCalled();
+  });
+
   it('triggers createSession when New Session button is clicked', async () => {
     const createSpy = vi.fn().mockResolvedValue('cs_999');
     useChatStore.setState({ createSession: createSpy });

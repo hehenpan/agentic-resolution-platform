@@ -114,6 +114,28 @@ class ChatService:
             cursor=cursor,
         )
 
+    def get_active_chat_session_meta(
+        self,
+        chat_session_id: str,
+    ) -> ChatSession | None:
+        """Get active chat session metadata by business session ID."""
+        return self.wrapper.get_active_chat_session_by_session_id(
+            chat_session_id=chat_session_id,
+        )
+
+    def delete_chat_session(
+        self,
+        tenant_id: int,
+        user_id: int,
+        chat_session_id: str,
+    ) -> bool:
+        """Soft delete a chat session owned by the user."""
+        return self.wrapper.soft_delete_chat_session(
+            chat_session_id=chat_session_id,
+            tenant_id=tenant_id,
+            user_id=user_id,
+        )
+
     def _get_or_create_thread_id(
         self,
         chat_session_id: str,
@@ -559,4 +581,3 @@ class ChatService:
                 data={"detail": f"Stream resume error: {e}"},
             )
             yield err_event.to_sse_format()
-

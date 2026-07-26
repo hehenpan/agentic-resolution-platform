@@ -4,6 +4,7 @@ from app.api.deps import get_current_user, get_chat_service, get_ai_agent_client
 from app.models.models import User
 from app.services.rbac_service import RBACServiceBase, Permission
 from app.schemas.common import BizCode
+from app.schemas.common import ResponseBase
 from app.schemas.chat import (
     CreateChatSessionRequest,
     CreateChatSessionResponse,
@@ -127,6 +128,93 @@ async def list_chat_sessions(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to query chat sessions",
+        )
+
+
+@chat_router.delete(
+    "/sessions/{chat_session_id}",
+    response_model=ResponseBase,
+    status_code=status.HTTP_200_OK,
+    summary="Delete Chat Session"
+)
+async def delete_chat_session(
+    chat_session_id: str = Path(..., description="Unique business chat session string ID."),
+    current_user: User = Depends(get_current_user),
+    chat_service: ChatService = Depends(get_chat_service),
+    rbac_service: RBACServiceBase = Depends(get_rbac_service),
+):
+    """
+    Soft delete a chat session owned by the authenticated user.
+    Deleted sessions are marked INVALID and hidden from normal chat APIs.
+    """
+    try:
+        session_obj = chat_service.get_active_chat_session_meta(
+            chat_session_id=chat_session_id,
+        )
+        if not session_obj:
+            logger.error(
+                f"ChatSession not found for deletion: chat_session_id={chat_session_id}, "
+                f"user_id={current_user.user_id}"
+            )
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Chat session not found"
+            )
+
+        if not rbac_service.has_permission(
+            user=current_user,
+            permission=Permission.USER_READ,
+            resource_tenant_id=session_obj.tenant_id
+        ):
+            logger.error(
+                f"Delete chat session permission denied: chat_session_id={chat_session_id}, "
+                f"user_id={current_user.user_id}, resource_tenant_id={session_obj.tenant_id}"
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Permission denied"
+            )
+
+        if session_obj.user_id != current_user.user_id:
+            logger.error(
+                f"Delete chat session owner mismatch: chat_session_id={chat_session_id}, "
+                f"request_user_id={current_user.user_id}, session_user_id={session_obj.user_id}"
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Permission denied"
+            )
+
+        deleted = chat_service.delete_chat_session(
+            tenant_id=session_obj.tenant_id,
+            user_id=session_obj.user_id,
+            chat_session_id=chat_session_id,
+        )
+        if not deleted:
+            logger.error(
+                f"ChatSession not found or forbidden for deletion: chat_session_id={chat_session_id}, "
+                f"user_id={current_user.user_id}"
+            )
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Chat session not found"
+            )
+
+        return ResponseBase(
+            code=BizCode.SUCCESS,
+            message="Chat session deleted successfully",
+            data={},
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(
+            f"Error deleting chat session: chat_session_id={chat_session_id}, "
+            f"user_id={current_user.user_id}, error={e}"
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to delete chat session",
         )
 
 
@@ -400,6 +488,4 @@ async def resume_chat_message(
             "X-Accel-Buffering": "no",
         },
     )
-
-
 
