@@ -9,6 +9,7 @@ function apiMockPlugin(): Plugin {
   const mockMessageStore: Record<string, unknown[]> = {};
   const mockReturnsStore: Record<number, any[]> = {};
   const mockFilesStore: any[] = [];
+  const mockFileContentStore: Record<number, string> = {};
 
   return {
     name: 'vite-plugin-api-mock',
@@ -952,6 +953,8 @@ function apiMockPlugin(): Plugin {
             const extMatch = fileName.match(/\.([^.]+)$/);
             const fileType = extMatch ? extMatch[1].toLowerCase() : 'unknown';
             const contentLength = Number(req.headers['content-length'] || 0);
+            const contentMatch = body.match(/\r\n\r\n([\s\S]*?)\r\n--/);
+            const fileContent = contentMatch ? contentMatch[1] : '';
 
             const now = Date.now();
             const fileId = Math.floor(Math.random() * 900000) + 100000;
@@ -968,6 +971,7 @@ function apiMockPlugin(): Plugin {
               vector_db_sync_status: 0,
             };
             mockFilesStore.push(newFile);
+            mockFileContentStore[fileId] = fileContent;
 
             res.statusCode = 201;
             res.setHeader('Content-Type', 'application/json');
@@ -983,6 +987,25 @@ function apiMockPlugin(): Plugin {
               })
             );
           });
+          return;
+        }
+
+        // Mock GET /api/v1/files/:file_id (file download)
+        if (/^\/api\/v1\/files\/\d+$/.test(url.replace(/\?.*$/, '')) && req.method === 'GET') {
+          const match = url.match(/\/api\/v1\/files\/(\d+)/);
+          const fileId = match ? Number(match[1]) : 0;
+          const file = mockFilesStore.find((item) => item.file_id === fileId);
+
+          if (!file) {
+            res.statusCode = 404;
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({ detail: 'File not found' }));
+            return;
+          }
+
+          res.setHeader('Content-Type', 'application/octet-stream');
+          res.setHeader('Content-Disposition', `attachment; filename="${file.file_name}"`);
+          res.end(mockFileContentStore[fileId] || '');
           return;
         }
 

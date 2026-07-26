@@ -9,11 +9,13 @@ vi.mock('../services/fileService', () => ({
   fileService: {
     listFiles: vi.fn(),
     uploadFile: vi.fn(),
+    downloadFileText: vi.fn(),
   },
 }));
 
 const mockListFiles = vi.mocked(fileServiceModule.fileService.listFiles);
 const mockUploadFile = vi.mocked(fileServiceModule.fileService.uploadFile);
+const mockDownloadFileText = vi.mocked(fileServiceModule.fileService.downloadFileText);
 
 const mockFileListResponse: FileListResponse = {
   code: 0,
@@ -158,8 +160,82 @@ describe('ManagementPage Component', () => {
     render(<ManagementPage />);
 
     await waitFor(() => {
-      expect(screen.getByTestId('delete-file-100001')).toBeInTheDocument();
-      expect(screen.getByTestId('delete-file-100002')).toBeInTheDocument();
+      const firstDeleteButton = screen.getByTestId('delete-file-100001');
+      const secondDeleteButton = screen.getByTestId('delete-file-100002');
+
+      expect(firstDeleteButton).toBeInTheDocument();
+      expect(secondDeleteButton).toBeInTheDocument();
+      expect(firstDeleteButton).not.toHaveClass('opacity-0');
+      expect(firstDeleteButton).not.toHaveClass('group-hover:opacity-100');
+    });
+  });
+
+  it('renders preview buttons for each file row', async () => {
+    mockListFiles.mockResolvedValueOnce(mockFileListResponse);
+
+    render(<ManagementPage />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('preview-file-100001')).toBeInTheDocument();
+      expect(screen.getByTestId('preview-file-100002')).toBeInTheDocument();
+    });
+  });
+
+  it('downloads and renders markdown content in the preview dialog', async () => {
+    mockListFiles.mockResolvedValueOnce(mockFileListResponse);
+    mockDownloadFileText.mockResolvedValueOnce('# Tenant Policy\n\nThis is **important**.\n\n- First rule\n\nUse `code`.');
+
+    render(<ManagementPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('readme.md')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByTestId('preview-file-100002'));
+
+    await waitFor(() => {
+      expect(mockDownloadFileText).toHaveBeenCalledWith(100002);
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Tenant Policy' })).toHaveClass('text-2xl');
+      expect(screen.getByTestId('markdown-preview-content').querySelector('strong')).toHaveTextContent('important');
+      expect(screen.getByTestId('markdown-preview-content').querySelector('ul')).toHaveClass('list-disc');
+      expect(screen.getByTestId('markdown-preview-content').querySelector('code')).toHaveClass('bg-slate-800');
+    });
+  });
+
+  it('downloads and renders non-markdown preview content as text', async () => {
+    mockListFiles.mockResolvedValueOnce(mockFileListResponse);
+    mockDownloadFileText.mockResolvedValueOnce('Plain preview body\nSecond line');
+
+    render(<ManagementPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('policy_doc.pdf')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByTestId('preview-file-100001'));
+
+    await waitFor(() => {
+      expect(mockDownloadFileText).toHaveBeenCalledWith(100001);
+      expect(screen.getByTestId('text-preview-content')).toHaveTextContent('Plain preview body');
+      expect(screen.queryByTestId('markdown-preview-content')).not.toBeInTheDocument();
+    });
+  });
+
+  it('shows an error message when preview download fails', async () => {
+    mockListFiles.mockResolvedValueOnce(mockFileListResponse);
+    mockDownloadFileText.mockRejectedValueOnce(new Error('Preview unavailable'));
+
+    render(<ManagementPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('readme.md')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByTestId('preview-file-100002'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Preview unavailable')).toBeInTheDocument();
     });
   });
 

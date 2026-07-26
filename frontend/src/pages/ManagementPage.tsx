@@ -1,5 +1,7 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react';
-import { Settings, ShieldCheck, UploadCloud, Trash2, Loader2, FileText, CheckCircle2, Clock, AlertTriangle, RefreshCw } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import { Settings, ShieldCheck, UploadCloud, Trash2, Loader2, FileText, CheckCircle2, Clock, AlertTriangle, RefreshCw, Eye, X } from 'lucide-react';
 import { fileService } from '../services/fileService';
 import type { FileItemResponse } from '../types/files';
 
@@ -67,6 +69,10 @@ export const ManagementPage: React.FC = () => {
   const [uploadSuccess, setUploadSuccess] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [deletedIds, setDeletedIds] = useState<Set<number>>(new Set());
+  const [previewFile, setPreviewFile] = useState<FileItemResponse | null>(null);
+  const [previewContent, setPreviewContent] = useState('');
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
 
   const fetchFiles = useCallback(async (cursor?: string) => {
     setIsLoadingFiles(true);
@@ -140,6 +146,30 @@ export const ManagementPage: React.FC = () => {
     if (lastCursor) {
       fetchFiles(lastCursor);
     }
+  };
+
+  const handlePreview = async (file: FileItemResponse) => {
+    setPreviewFile(file);
+    setPreviewContent('');
+    setPreviewError(null);
+    setIsPreviewLoading(true);
+
+    try {
+      const content = await fileService.downloadFileText(file.file_id);
+      setPreviewContent(content);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to load file preview.';
+      setPreviewError(message);
+    } finally {
+      setIsPreviewLoading(false);
+    }
+  };
+
+  const closePreview = () => {
+    setPreviewFile(null);
+    setPreviewContent('');
+    setPreviewError(null);
+    setIsPreviewLoading(false);
   };
 
   const visibleFiles = files.filter((f) => !deletedIds.has(f.file_id));
@@ -237,7 +267,7 @@ export const ManagementPage: React.FC = () => {
         ) : (
           <div className="space-y-4">
             {/* Table Header */}
-            <div className="grid grid-cols-[1fr_80px_60px_140px_160px_90px_50px] gap-3 px-4 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider border-b border-border/40">
+            <div className="grid grid-cols-[1fr_80px_60px_140px_160px_90px_76px] gap-3 px-4 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider border-b border-border/40">
               <span>File Name</span>
               <span>Size</span>
               <span>Type</span>
@@ -251,7 +281,7 @@ export const ManagementPage: React.FC = () => {
             {visibleFiles.map((file) => (
               <div
                 key={file.file_id}
-                className="grid grid-cols-[1fr_80px_60px_140px_160px_90px_50px] gap-3 items-center px-4 py-3 rounded-xl bg-slate-900/40 border border-border/40 hover:border-indigo-500/30 transition-all group"
+                className="grid grid-cols-[1fr_80px_60px_140px_160px_90px_76px] gap-3 items-center px-4 py-3 rounded-xl bg-slate-900/40 border border-border/40 hover:border-indigo-500/30 transition-all"
               >
                 <div className="flex items-center space-x-2 min-w-0">
                   <FileText className="w-4 h-4 text-blue-400 shrink-0" />
@@ -272,14 +302,24 @@ export const ManagementPage: React.FC = () => {
                   {file.owner_email}
                 </span>
                 <SyncStatusBadge status={file.vector_db_sync_status} />
-                <button
-                  onClick={() => handleDelete(file.file_id)}
-                  className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-all opacity-0 group-hover:opacity-100"
-                  title="Delete file (UI only)"
-                  data-testid={`delete-file-${file.file_id}`}
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
+                <div className="flex items-center justify-end space-x-1">
+                  <button
+                    onClick={() => handlePreview(file)}
+                    className="p-1.5 rounded-lg text-slate-500 hover:text-blue-400 hover:bg-blue-500/10 transition-all"
+                    title="Preview file"
+                    data-testid={`preview-file-${file.file_id}`}
+                  >
+                    <Eye className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => handleDelete(file.file_id)}
+                    className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-all"
+                    title="Delete file (UI only)"
+                    data-testid={`delete-file-${file.file_id}`}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
             ))}
 
@@ -301,6 +341,163 @@ export const ManagementPage: React.FC = () => {
           </div>
         )}
       </div>
+
+      {previewFile && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-6"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="file-preview-title"
+        >
+          <div className="w-full max-w-4xl max-h-[82vh] flex flex-col rounded-xl border border-border bg-slate-950 shadow-2xl">
+            <div className="flex items-center justify-between gap-4 border-b border-border/60 px-5 py-4">
+              <div className="min-w-0">
+                <h3 id="file-preview-title" className="text-sm font-semibold text-foreground truncate">
+                  {previewFile.file_name}
+                </h3>
+                <p className="mt-1 text-xs text-muted-foreground uppercase font-mono">
+                  {previewFile.file_type} preview
+                </p>
+              </div>
+              <button
+                onClick={closePreview}
+                className="p-1.5 rounded-lg text-slate-500 hover:text-foreground hover:bg-muted/40 transition-all"
+                title="Close preview"
+                data-testid="close-file-preview"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-auto px-5 py-4">
+              {isPreviewLoading ? (
+                <div className="flex items-center justify-center py-16 text-muted-foreground text-sm">
+                  <Loader2 className="w-5 h-5 mr-2 animate-spin text-primary" />
+                  <span>Loading preview...</span>
+                </div>
+              ) : previewError ? (
+                <div className="rounded-lg border border-red-500/20 bg-red-600/10 p-4 text-sm text-red-400">
+                  {previewError}
+                </div>
+              ) : previewFile.file_type.toLowerCase() === 'md' ? (
+                <div
+                  className="max-w-none text-sm leading-7 text-slate-200"
+                  data-testid="markdown-preview-content"
+                >
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    components={{
+                      h1: ({ children }) => (
+                        <h1 className="mb-4 border-b border-border/60 pb-2 text-2xl font-semibold text-foreground">
+                          {children}
+                        </h1>
+                      ),
+                      h2: ({ children }) => (
+                        <h2 className="mb-3 mt-6 border-b border-border/40 pb-2 text-xl font-semibold text-foreground">
+                          {children}
+                        </h2>
+                      ),
+                      h3: ({ children }) => (
+                        <h3 className="mb-2 mt-5 text-base font-semibold text-foreground">
+                          {children}
+                        </h3>
+                      ),
+                      p: ({ children }) => (
+                        <p className="mb-4 text-slate-200">
+                          {children}
+                        </p>
+                      ),
+                      strong: ({ children }) => (
+                        <strong className="font-semibold text-foreground">
+                          {children}
+                        </strong>
+                      ),
+                      em: ({ children }) => (
+                        <em className="italic text-slate-100">
+                          {children}
+                        </em>
+                      ),
+                      a: ({ href, children }) => (
+                        <a
+                          href={href}
+                          className="text-blue-400 underline underline-offset-2 hover:text-blue-300"
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          {children}
+                        </a>
+                      ),
+                      ul: ({ children }) => (
+                        <ul className="mb-4 ml-5 list-disc space-y-1">
+                          {children}
+                        </ul>
+                      ),
+                      ol: ({ children }) => (
+                        <ol className="mb-4 ml-5 list-decimal space-y-1">
+                          {children}
+                        </ol>
+                      ),
+                      li: ({ children }) => (
+                        <li className="pl-1 text-slate-200">
+                          {children}
+                        </li>
+                      ),
+                      blockquote: ({ children }) => (
+                        <blockquote className="mb-4 border-l-2 border-indigo-400/60 bg-indigo-500/10 py-2 pl-4 text-slate-200">
+                          {children}
+                        </blockquote>
+                      ),
+                      code: ({ className, children }) => {
+                        const isBlockCode = Boolean(className);
+                        return isBlockCode ? (
+                          <code className={`${className || ''} block overflow-x-auto rounded-lg bg-slate-900 p-3 text-xs leading-6 text-slate-100`}>
+                            {children}
+                          </code>
+                        ) : (
+                          <code className="rounded bg-slate-800 px-1.5 py-0.5 text-xs text-slate-100">
+                            {children}
+                          </code>
+                        );
+                      },
+                      pre: ({ children }) => (
+                        <pre className="mb-4 overflow-x-auto">
+                          {children}
+                        </pre>
+                      ),
+                      table: ({ children }) => (
+                        <div className="mb-4 overflow-x-auto rounded-lg border border-border/60">
+                          <table className="min-w-full divide-y divide-border/60 text-left text-xs">
+                            {children}
+                          </table>
+                        </div>
+                      ),
+                      th: ({ children }) => (
+                        <th className="bg-slate-900 px-3 py-2 font-semibold text-foreground">
+                          {children}
+                        </th>
+                      ),
+                      td: ({ children }) => (
+                        <td className="border-t border-border/40 px-3 py-2 text-slate-200">
+                          {children}
+                        </td>
+                      ),
+                      hr: () => <hr className="my-6 border-border/60" />,
+                    }}
+                  >
+                    {previewContent}
+                  </ReactMarkdown>
+                </div>
+              ) : (
+                <pre
+                  className="whitespace-pre-wrap break-words rounded-lg bg-slate-900/70 p-4 text-xs leading-6 text-slate-200"
+                  data-testid="text-preview-content"
+                >
+                  {previewContent}
+                </pre>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
