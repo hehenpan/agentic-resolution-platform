@@ -7,6 +7,7 @@ import type {
   CreateChatSessionResponse,
   ChatSessionListResponse,
   ChatMessageListResponse,
+  DeleteChatSessionResponse,
   SendChatMessageRequest,
   ResumeChatMessageRequest,
 } from '../types/chat';
@@ -30,6 +31,13 @@ export const chatService = {
     }
     return request<ChatSessionListResponse>(`/api/v1/chat/sessions?${params.toString()}`, {
       method: 'GET',
+    });
+  },
+
+  /** Soft delete a chat session (DELETE /api/v1/chat/sessions/{chat_session_id}) */
+  async deleteSession(chatSessionId: string): Promise<DeleteChatSessionResponse> {
+    return request<DeleteChatSessionResponse>(`/api/v1/chat/sessions/${chatSessionId}`, {
+      method: 'DELETE',
     });
   },
 
@@ -271,4 +279,3 @@ export const chatService = {
     ];
   },
 };
-

@@ -1,5 +1,5 @@
-import React, { useEffect } from 'react';
-import { Plus, MessageSquare, Loader2, Settings, MessageCircle, FileText } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Plus, MessageSquare, Loader2, Settings, MessageCircle, FileText, Trash2 } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useChatStore } from '../../store/chatStore';
 import { useAuthStore } from '../../store/authStore';
@@ -11,8 +11,10 @@ export const Sidebar: React.FC = () => {
     isLoadingSessions,
     fetchSessions,
     createSession,
+    deleteSession,
     setActiveChatSession,
   } = useChatStore();
+  const [deletingSessionIds, setDeletingSessionIds] = useState<Set<string>>(() => new Set());
 
   const location = useLocation();
   const navigate = useNavigate();
@@ -29,6 +31,23 @@ export const Sidebar: React.FC = () => {
 
   const handleCreateNewSession = async () => {
     await createSession('New Chat Session');
+  };
+
+  const handleDeleteSession = async (
+    event: React.MouseEvent<HTMLButtonElement>,
+    chatSessionId: string
+  ) => {
+    event.stopPropagation();
+    setDeletingSessionIds((current) => new Set(current).add(chatSessionId));
+    try {
+      await deleteSession(chatSessionId);
+    } finally {
+      setDeletingSessionIds((current) => {
+        const next = new Set(current);
+        next.delete(chatSessionId);
+        return next;
+      });
+    }
   };
 
   const formatDate = (timestamp?: number) => {
@@ -75,24 +94,43 @@ export const Sidebar: React.FC = () => {
 
             {sessions.map((session) => {
               const isActive = session.chat_session_id === activeChatSessionId;
+              const isDeleting = deletingSessionIds.has(session.chat_session_id);
               return (
-                <button
+                <div
                   key={session.chat_session_id}
-                  onClick={() => setActiveChatSession(session.chat_session_id)}
-                  className={`w-full text-left p-3 rounded-xl transition-all flex items-start space-x-3 group ${
+                  className={`w-full rounded-xl transition-all flex items-start group ${
                     isActive
                       ? 'bg-primary/10 border border-primary/20 text-foreground'
                       : 'text-muted-foreground hover:bg-muted/40 hover:text-foreground'
                   }`}
                 >
-                  <MessageSquare className={`w-4 h-4 mt-0.5 shrink-0 ${isActive ? 'text-primary' : ''}`} />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{session.title}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5 truncate">
-                      {formatDate(session.update_ts)}
-                    </p>
-                  </div>
-                </button>
+                  <button
+                    onClick={() => setActiveChatSession(session.chat_session_id)}
+                    className="flex-1 min-w-0 text-left p-3 flex items-start space-x-3"
+                  >
+                    <MessageSquare className={`w-4 h-4 mt-0.5 shrink-0 ${isActive ? 'text-primary' : ''}`} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{session.title}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                        {formatDate(session.update_ts)}
+                      </p>
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`Delete ${session.title}`}
+                    title="Delete session"
+                    disabled={isDeleting}
+                    onClick={(event) => handleDeleteSession(event, session.chat_session_id)}
+                    className="m-2 mt-2.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-all hover:bg-destructive/10 hover:text-destructive focus:outline-none focus:ring-2 focus:ring-destructive/30 disabled:pointer-events-none disabled:opacity-60"
+                  >
+                    {isDeleting ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Trash2 className="h-3.5 w-3.5" />
+                    )}
+                  </button>
+                </div>
               );
             })}
           </>

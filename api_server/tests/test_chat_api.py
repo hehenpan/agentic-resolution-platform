@@ -93,6 +93,221 @@ def test_create_chat_session_default_title(client, db_session: Session):
     assert res_data["data"]["session_info"]["title"] == "New Chat"
 
 
+def test_delete_chat_session_success(client, db_session: Session):
+    """
+    Test deleting a chat session marks it INVALID without removing the DB row.
+    """
+    login_user_client(client)
+
+    from app.models.models import User
+    from utils.commons import generate_uuid_hex, get_current_ts
+
+    user = db_session.exec(select(User).where(User.email == TEST_USER_EMAIL)).first()
+    now_ts = get_current_ts()
+    session_id = f"cs_{generate_uuid_hex()}"
+    chat_session = ChatSession(
+        chat_session_id=session_id,
+        tenant_id=user.tenant_id,
+        user_id=user.user_id,
+        title="Session To Delete",
+        status=ModelChatSessionStatus.ACTIVE,
+        create_ts=now_ts - 10,
+        update_ts=now_ts - 10,
+    )
+    db_session.add(chat_session)
+    db_session.commit()
+
+    response = client.delete(f"https://testserver/api/v1/chat/sessions/{session_id}")
+
+    assert response.status_code == status.HTTP_200_OK
+    res_data = response.json()
+    assert res_data["code"] == BizCode.SUCCESS
+    assert res_data["message"] == "Chat session deleted successfully"
+    assert res_data["data"] == {}
+
+    db_session.expire_all()
+    db_record = db_session.exec(
+        select(ChatSession).where(ChatSession.chat_session_id == session_id)
+    ).first()
+    assert db_record is not None
+    assert db_record.status == ModelChatSessionStatus.INVALID
+    assert db_record.update_ts >= now_ts - 10
+
+
+def test_delete_chat_session_not_found(client):
+    """Test deleting a missing chat session returns 404."""
+    login_user_client(client)
+
+    response = client.delete("https://testserver/api/v1/chat/sessions/cs_missing_session")
+
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert response.json()["detail"] == "Chat session not found"
+
+
+def test_deleted_chat_session_hidden_from_list(client, db_session: Session):
+    """
+    Test deleted chat sessions are excluded from the user's session list.
+    """
+    login_user_client(client)
+
+    from app.models.models import User
+    from utils.commons import generate_uuid_hex, get_current_ts
+
+    user = db_session.exec(select(User).where(User.email == TEST_USER_EMAIL)).first()
+    now_ts = get_current_ts()
+    session_id = f"cs_{generate_uuid_hex()}"
+    chat_session = ChatSession(
+        chat_session_id=session_id,
+        tenant_id=user.tenant_id,
+        user_id=user.user_id,
+        title="Hidden After Delete",
+        status=ModelChatSessionStatus.ACTIVE,
+        create_ts=now_ts,
+        update_ts=now_ts,
+    )
+    db_session.add(chat_session)
+    db_session.commit()
+
+    delete_response = client.delete(f"https://testserver/api/v1/chat/sessions/{session_id}")
+    assert delete_response.status_code == status.HTTP_200_OK
+
+    list_response = client.get("https://testserver/api/v1/chat/sessions")
+
+    assert list_response.status_code == status.HTTP_200_OK
+    returned_ids = {
+        item["chat_session_id"]
+        for item in list_response.json()["data"]["items"]
+    }
+    assert session_id not in returned_ids
+
+
+def test_deleted_chat_session_messages_not_accessible(client, db_session: Session):
+    """
+    Test message history for a deleted chat session is no longer accessible.
+    """
+    login_user_client(client)
+
+    from app.models.models import ChatMessage, ChatMessageSenderType as ModelSenderType, User
+    from utils.commons import generate_uuid_hex, get_current_ts
+
+    user = db_session.exec(select(User).where(User.email == TEST_USER_EMAIL)).first()
+    session_id = f"cs_{generate_uuid_hex()}"
+    chat_session = ChatSession(
+        chat_session_id=session_id,
+        tenant_id=user.tenant_id,
+        user_id=user.user_id,
+        title="Deleted Session With Messages",
+        status=ModelChatSessionStatus.ACTIVE,
+        create_ts=get_current_ts(),
+        update_ts=get_current_ts(),
+    )
+    chat_message = ChatMessage(
+        event_id=f"evt_{generate_uuid_hex()}",
+        chat_session_id=session_id,
+        thread_id="thread_delete_test",
+        run_id="run_delete_test",
+        sender_type=ModelSenderType.USER,
+        event_kind="user_message",
+        sequence=1,
+        payload_json='{"text": "Hello"}',
+        create_ts_ms=1000.0,
+    )
+    db_session.add(chat_session)
+    db_session.add(chat_message)
+    db_session.commit()
+
+    delete_response = client.delete(f"https://testserver/api/v1/chat/sessions/{session_id}")
+    assert delete_response.status_code == status.HTTP_200_OK
+
+    messages_response = client.get(f"https://testserver/api/v1/chat/sessions/{session_id}/messages")
+
+    assert messages_response.status_code == status.HTTP_404_NOT_FOUND
+    assert messages_response.json()["detail"] == "Chat session not found"
+
+
+def test_delete_chat_session_uses_resource_tenant_for_rbac(client, db_session: Session):
+    """
+    Test delete permission checks use the ChatSession tenant as resource_tenant_id.
+    """
+    login_user_client(client)
+
+    from app.api.deps import get_rbac_service
+    from app.models.models import User
+    from app.services.rbac_service import RBACServiceBase
+    from utils.commons import generate_uuid_hex, get_current_ts
+
+    user = db_session.exec(select(User).where(User.email == TEST_USER_EMAIL)).first()
+    session_id = f"cs_{generate_uuid_hex()}"
+    resource_tenant_id = user.tenant_id + 1
+    chat_session = ChatSession(
+        chat_session_id=session_id,
+        tenant_id=resource_tenant_id,
+        user_id=user.user_id,
+        title="Different Tenant Session",
+        status=ModelChatSessionStatus.ACTIVE,
+        create_ts=get_current_ts(),
+        update_ts=get_current_ts(),
+    )
+    db_session.add(chat_session)
+    db_session.commit()
+
+    class RecordingRBAC(RBACServiceBase):
+        seen_resource_tenant_id = None
+
+        def has_permission(self, user, permission, resource_tenant_id=None):
+            self.__class__.seen_resource_tenant_id = resource_tenant_id
+            return False
+
+    client.app.dependency_overrides[get_rbac_service] = RecordingRBAC
+    try:
+        response = client.delete(f"https://testserver/api/v1/chat/sessions/{session_id}")
+    finally:
+        client.app.dependency_overrides.pop(get_rbac_service, None)
+
+    assert response.status_code == status.HTTP_403_FORBIDDEN
+    assert RecordingRBAC.seen_resource_tenant_id == resource_tenant_id
+
+
+def test_delete_chat_session_rejects_other_users_session(client, db_session: Session):
+    """
+    Test a user cannot delete another user's chat session in the same tenant.
+    """
+    login_user_client(client)
+
+    from app.models.models import User
+    from tests.conftest import TEST_TENANT_ADMIN_EMAIL
+    from utils.commons import generate_uuid_hex, get_current_ts
+
+    current_user = db_session.exec(select(User).where(User.email == TEST_USER_EMAIL)).first()
+    other_user = db_session.exec(select(User).where(User.email == TEST_TENANT_ADMIN_EMAIL)).first()
+    assert other_user.user_id != current_user.user_id
+    assert other_user.tenant_id == current_user.tenant_id
+
+    session_id = f"cs_{generate_uuid_hex()}"
+    chat_session = ChatSession(
+        chat_session_id=session_id,
+        tenant_id=other_user.tenant_id,
+        user_id=other_user.user_id,
+        title="Other User Session",
+        status=ModelChatSessionStatus.ACTIVE,
+        create_ts=get_current_ts(),
+        update_ts=get_current_ts(),
+    )
+    db_session.add(chat_session)
+    db_session.commit()
+
+    response = client.delete(f"https://testserver/api/v1/chat/sessions/{session_id}")
+
+    assert response.status_code == status.HTTP_403_FORBIDDEN
+    assert response.json()["detail"] == "Permission denied"
+
+    db_session.expire_all()
+    db_record = db_session.exec(
+        select(ChatSession).where(ChatSession.chat_session_id == session_id)
+    ).first()
+    assert db_record.status == ModelChatSessionStatus.ACTIVE
+
+
 def test_list_chat_sessions_success(client, db_session: Session):
     """
     Test listing chat sessions using composite cursor format '{create_ts}_{id}'.
@@ -971,12 +1186,13 @@ def test_project_human_input_schema_id_known_and_unknown():
     assert "email" in web_event.request.input_schema["properties"]
 
 
-def test_chat_endpoints_rbac_denied(client):
+def test_chat_endpoints_rbac_denied(client, db_session: Session):
     """
     Test that when RBAC permission is denied:
     1. GET /api/v1/chat/sessions/{chat_session_id}/messages returns 403 Forbidden.
     2. POST /api/v1/chat/sessions/{chat_session_id}/messages returns 403 Forbidden.
     3. POST /api/v1/chat/sessions/{chat_session_id}/resume returns 403 Forbidden.
+    4. DELETE /api/v1/chat/sessions/{chat_session_id} returns 403 Forbidden.
     """
     login_user_client(client)
     from app.api.deps import get_rbac_service
@@ -1014,7 +1230,27 @@ def test_chat_endpoints_rbac_denied(client):
         )
         assert res_resume.status_code == status.HTTP_403_FORBIDDEN
         assert res_resume.json()["detail"] == "Permission denied"
+
+        # 4. DELETE session
+        from app.models.models import User
+        from utils.commons import get_current_ts
+
+        user = db_session.exec(select(User).where(User.email == TEST_USER_EMAIL)).first()
+        delete_session_id = "cs_delete_rbac_denied"
+        chat_session = ChatSession(
+            chat_session_id=delete_session_id,
+            tenant_id=user.tenant_id,
+            user_id=user.user_id,
+            title="RBAC Denied Delete",
+            status=ModelChatSessionStatus.ACTIVE,
+            create_ts=get_current_ts(),
+            update_ts=get_current_ts(),
+        )
+        db_session.add(chat_session)
+        db_session.commit()
+
+        res_delete = client.delete(f"https://testserver/api/v1/chat/sessions/{delete_session_id}")
+        assert res_delete.status_code == status.HTTP_403_FORBIDDEN
+        assert res_delete.json()["detail"] == "Permission denied"
     finally:
         client.app.dependency_overrides.pop(get_rbac_service, None)
-
-

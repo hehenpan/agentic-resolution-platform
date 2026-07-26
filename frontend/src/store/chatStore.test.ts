@@ -75,6 +75,65 @@ describe('chatStore', () => {
     expect(useChatStore.getState().sessions[0]).toEqual(mockSessionInfo);
   });
 
+  it('deleteSession removes session, clears cached messages, and moves active session', async () => {
+    const keepSession = {
+      id: 1,
+      chat_session_id: 'cs_keep',
+      tenant_id: 1,
+      user_id: 10,
+      title: 'Keep Session',
+      status: 1,
+      create_ts: 1753236000,
+      update_ts: 1753236000,
+    };
+    const deleteSession = {
+      id: 2,
+      chat_session_id: 'cs_delete',
+      tenant_id: 1,
+      user_id: 10,
+      title: 'Delete Session',
+      status: 1,
+      create_ts: 1753236001,
+      update_ts: 1753236001,
+    };
+
+    useChatStore.setState({
+      sessions: [deleteSession, keepSession],
+      activeChatSessionId: 'cs_delete',
+      sessionMessages: {
+        cs_delete: [
+          {
+            id: 'msg_delete',
+            role: 'user',
+            content: 'Delete me',
+            timestamp: new Date().toISOString(),
+          },
+        ],
+        cs_keep: [
+          {
+            id: 'msg_keep',
+            role: 'user',
+            content: 'Keep me',
+            timestamp: new Date().toISOString(),
+          },
+        ],
+      },
+    });
+    vi.spyOn(chatService, 'deleteSession').mockResolvedValueOnce({
+      code: 0,
+      message: 'Chat session deleted successfully',
+      data: {},
+    });
+
+    const result = await useChatStore.getState().deleteSession('cs_delete');
+
+    expect(result).toBe(true);
+    expect(useChatStore.getState().sessions).toEqual([keepSession]);
+    expect(useChatStore.getState().activeChatSessionId).toBe('cs_keep');
+    expect(useChatStore.getState().sessionMessages.cs_delete).toBeUndefined();
+    expect(useChatStore.getState().sessionMessages.cs_keep).toHaveLength(1);
+  });
+
   it('setActiveChatSession updates activeChatSessionId', () => {
     useChatStore.getState().setActiveChatSession('cs_999');
     expect(useChatStore.getState().activeChatSessionId).toBe('cs_999');
