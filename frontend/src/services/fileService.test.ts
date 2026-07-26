@@ -108,4 +108,35 @@ describe('fileService', () => {
 
     expect(result.data.file_name).toBe('legacy-upload.md');
   });
+
+  it('downloads file content as text for preview', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: vi.fn().mockResolvedValue('# Preview'),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fileService.downloadFileText(100002);
+
+    expect(result).toBe('# Preview');
+    expect(fetchMock).toHaveBeenCalledWith('/api/v1/files/100002', {
+      method: 'GET',
+      headers: {
+        Accept: 'text/plain, text/markdown, application/octet-stream',
+      },
+    });
+  });
+
+  it('throws when preview download fails', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 404,
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(fileService.downloadFileText(999999)).rejects.toThrow(
+      'Failed to download file with status 404'
+    );
+  });
 });

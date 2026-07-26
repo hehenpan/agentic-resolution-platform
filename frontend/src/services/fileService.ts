@@ -68,4 +68,23 @@ export const fileService = {
     });
     return normalizeFileUploadResponse(response);
   },
+
+  /**
+   * Download a file as text for in-browser preview.
+   * Endpoint: GET /api/v1/files/{file_id}
+   */
+  async downloadFileText(fileId: number): Promise<string> {
+    const response = await fetch(`/api/v1/files/${fileId}`, {
+      method: 'GET',
+      headers: {
+        Accept: 'text/plain, text/markdown, application/octet-stream',
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to download file with status ${response.status}`);
+    }
+
+    return response.text();
+  },
 };
