@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from ai_agent_sdk.agent_run_projector import AgentRunProjector
+from ai_agent_sdk.agent_run_event_projector import AgentRunEventProjector
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.runnables import RunnableConfig
 from langgraph.types import StreamMode
@@ -181,7 +181,7 @@ async def test_supervisor_graph_streams_policy_workflow_updates(
     assert progress_events[1].details["result_count"] > 0
     assert progress_events[0].progress_id != progress_events[1].progress_id
 
-    projector = AgentRunProjector(
+    projector = AgentRunEventProjector(
         thread_id="integration-supervisor-policy-stream",
         clock=lambda: 1_725_000_000,
     )

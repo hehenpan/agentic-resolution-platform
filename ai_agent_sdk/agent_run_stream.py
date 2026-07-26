@@ -13,7 +13,6 @@ from langgraph_sdk.schema import (
     Input,
     StreamMode,
 )
-from pydantic import BaseModel, Field, JsonValue
 from shared_common.schemas.ai_agent import (
     AgentCreateRunRequest,
     AgentCreateRunResponse,
@@ -29,7 +28,8 @@ from shared_common.schemas.ai_agent import (
     AgentTurnRequest,
 )
 
-from ai_agent_sdk.agent_run_projector import AgentRunProjector
+from ai_agent_sdk.agent_run_event_projector import AgentRunEventProjector
+from ai_agent_sdk.agent_run_input_projector import AgentRunInputProjector
 from ai_agent_sdk.assistants import AgentAssistantId
 
 AGENT_STREAM_MODES: tuple[StreamMode, ...] = (
@@ -43,24 +43,6 @@ AGENT_STREAM_MODES: tuple[StreamMode, ...] = (
     "custom",
     "messages-tuple",
 )
-
-
-class _AgentUserMessageInput(BaseModel):
-    role: str = Field(
-        default="user",
-        description="LangChain chat role for the submitted message.",
-    )
-    content: str = Field(description="Plain text content for the user message.")
-    additional_kwargs: dict[str, JsonValue] = Field(
-        default_factory=dict,
-        description="Additional LangChain message metadata.",
-    )
-
-
-class _AgentSupervisorInput(BaseModel):
-    messages: list[_AgentUserMessageInput] = Field(
-        description="Messages submitted to the supervisor graph."
-    )
 
 
 def _parse_run_status(raw_status: str) -> AgentRunStatus:
@@ -89,13 +71,7 @@ class AgentRunStream:
         request: AgentCreateRunRequest,
     ) -> AgentCreateRunResponse:
         """Explicitly create a background agent run on a thread."""
-        input_payload: Input | None = None
-        if request.message is not None:
-            message = _AgentUserMessageInput(
-                content=request.message.content,
-                additional_kwargs=request.message.metadata,
-            )
-            input_payload = _AgentSupervisorInput(messages=[message])
+        input_payload = AgentRunInputProjector.project_create_run_input(request)
 
         try:
             await self._client.threads.create(
@@ -166,11 +142,7 @@ class AgentRunStream:
         request: AgentTurnRequest,
     ) -> AsyncIterator[AgentDomainEvent]:
         """Stream one ordinary supervisor turn."""
-        message = _AgentUserMessageInput(
-            content=request.message.content,
-            additional_kwargs=request.message.metadata,
-        )
-        input_payload: Input = _AgentSupervisorInput(messages=[message])
+        input_payload = AgentRunInputProjector.project_turn_input(request)
         return self._stream(
             thread_id=request.thread_id,
             assistant_id=AgentAssistantId.SUPERVISOR,
@@ -183,25 +155,12 @@ class AgentRunStream:
         request: AgentResumeRequest,
     ) -> AsyncIterator[AgentDomainEvent]:
         """Resume one interrupted supervisor turn."""
-        cursor = request.resume_cursor
-        checkpoint: Checkpoint = {
-            "thread_id": request.thread_id,
-            "checkpoint_id": cursor.checkpoint_id,
-            "checkpoint_ns": cursor.checkpoint_ns,
-            "checkpoint_map": cursor.checkpoint_map,
-        }
-        command: Command = {
-            "resume": {
-                request.interrupt_id: request.response.response_data,
-            }
-        }
-
         return self._stream(
             thread_id=request.thread_id,
             assistant_id=AgentAssistantId.SUPERVISOR,
             run_id=request.run_id,
-            command=command,
-            checkpoint=checkpoint,
+            command=AgentRunInputProjector.project_resume_command(request),
+            checkpoint=AgentRunInputProjector.project_resume_checkpoint(request),
         )
 
     def stream_rag_file_import(
@@ -209,7 +168,7 @@ class AgentRunStream:
         request: AgentRAGFileImportRequest,
     ) -> AsyncIterator[AgentDomainEvent]:
         """Stream one RAG file import operation."""
-        input_payload: Input = request.payload.model_dump(mode="json")
+        input_payload = AgentRunInputProjector.project_rag_file_import_input(request)
         return self._stream(
             thread_id=request.thread_id,
             assistant_id=AgentAssistantId.FILE_INGEST,
@@ -231,7 +190,7 @@ class AgentRunStream:
         thread_id: str,
         run_id: str,
     ) -> AsyncIterator[AgentDomainEvent]:
-        projector = AgentRunProjector(thread_id=thread_id, run_id=run_id)
+        projector = AgentRunEventProjector(thread_id=thread_id, run_id=run_id)
         try:
             raw_stream = self._client.runs.join_stream(
                 thread_id=thread_id,
@@ -269,7 +228,7 @@ class AgentRunStream:
         thread_id: str,
         run_id: str | None = None,
     ) -> AsyncIterator[AgentDomainEvent]:
-        projector = AgentRunProjector(thread_id=thread_id, run_id=run_id)
+        projector = AgentRunEventProjector(thread_id=thread_id, run_id=run_id)
         try:
             thread_state = await self._client.threads.get_state(
                 thread_id,
@@ -292,7 +251,7 @@ class AgentRunStream:
         command: Command | None = None,
         checkpoint: Checkpoint | None = None,
     ) -> AsyncIterator[AgentDomainEvent]:
-        projector = AgentRunProjector(thread_id=thread_id, run_id=run_id)
+        projector = AgentRunEventProjector(thread_id=thread_id, run_id=run_id)
 
         try:
             if checkpoint is None:
@@ -305,7 +264,7 @@ class AgentRunStream:
             # RunsClient.stream() creates a new run; on resume it locates the
             # interrupted state via the `checkpoint` parameter and provides the
             # user's response through `command`.  The original run_id is only
-            # used by AgentRunProjector for internal tracking / correlation.
+            # used by AgentRunEventProjector for internal tracking / correlation.
             raw_stream = self._client.runs.stream(
                 thread_id=thread_id,
                 assistant_id=assistant_id.value if hasattr(assistant_id, "value") else str(assistant_id),

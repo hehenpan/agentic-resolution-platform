@@ -3,6 +3,7 @@ from fastapi import APIRouter
 from fastapi.testclient import TestClient
 from loguru import logger
 from starlette_context import context
+from app.core.logger import inject_starlette_context
 from app.main import app
 
 # Create a test router (avoiding prefix "test_" so pytest doesn't collect it as a test)
@@ -24,6 +25,7 @@ def log_capture():
     Fixture to capture loguru log messages.
     """
     captured_logs = []
+    logger.configure(patcher=inject_starlette_context)
     
     # Add a temporary sink to capture formatting and extra dict
     handler_id = logger.add(

@@ -45,6 +45,7 @@ def _event_fields() -> dict[str, object]:
     return {
         "event_id": EVENT_ID,
         "thread_id": "thread-1",
+        "run_id": "run-1",
         "sequence": 1,
         "source_sequences": [4, 5],
         "created_at": CREATED_AT,
@@ -177,7 +178,7 @@ def test_domain_event_rejects_unknown_kind() -> None:
 
 @pytest.mark.parametrize(
     "required_field",
-    ["event_id", "thread_id", "sequence", "created_at"],
+    ["event_id", "thread_id", "run_id", "sequence", "created_at"],
 )
 def test_domain_event_rejects_missing_envelope_field(
     required_field: str,
@@ -198,6 +199,7 @@ def test_domain_event_rejects_missing_envelope_field(
     [
         ("event_id", ""),
         ("thread_id", ["invalid-thread"]),
+        ("run_id", ""),
     ],
 )
 def test_domain_event_rejects_invalid_envelope_field_type(
@@ -339,6 +341,7 @@ def test_domain_event_defaults_source_sequences() -> None:
     event = AgentRunCompleted(
         event_id=EVENT_ID,
         thread_id="thread-1",
+        run_id="run-1",
         sequence=0,
         created_at=CREATED_AT,
     )
