@@ -1,5 +1,6 @@
-import React from 'react';
-import { Bot, User, Wrench, CheckCircle2, AlertCircle, Loader2, FileText, ExternalLink } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { Bot, User, Wrench, CheckCircle2, AlertCircle, Loader2, FileText, Eye, X } from 'lucide-react';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type {
@@ -21,6 +22,7 @@ import { OrderDetailsCard } from './OrderDetailsCard';
 import { ReturnsByOrderCard } from './ReturnsByOrderCard';
 import { ReturnsByCustomerCard } from './ReturnsByCustomerCard';
 import { CreateReturnResultCard } from './CreateReturnResultCard';
+import { fileService } from '../../services/fileService';
 
 interface ChatMessageItemProps {
   message: ChatMessage;
@@ -86,6 +88,14 @@ interface SourceReferencesProps {
   sources: WebSourceReference[];
 }
 
+interface SourcePreviewState {
+  fileId: number;
+  fileName: string;
+  content: string;
+  isLoading: boolean;
+  error: string | null;
+}
+
 const getSourceFileId = (source: WebSourceReference): number | null => {
   if (typeof source.file_id === 'number') {
     return source.file_id;
@@ -111,6 +121,10 @@ const getSourceFileId = (source: WebSourceReference): number | null => {
 
 const getSourceDisplayName = (source: WebSourceReference): string => {
   return source.title || `Source ${source.source_id}`;
+};
+
+const isMarkdownFileName = (fileName: string): boolean => {
+  return fileName.toLowerCase().endsWith('.md') || fileName.toLowerCase().endsWith('.markdown');
 };
 
 const getSourceFileName = (source: WebSourceReference): string | null => {
@@ -155,11 +169,62 @@ const dedupeSourcesForDisplay = (sources: WebSourceReference[]): WebSourceRefere
 };
 
 const SourceReferences: React.FC<SourceReferencesProps> = ({ sources }) => {
+  const [preview, setPreview] = useState<SourcePreviewState | null>(null);
   const displaySources = dedupeSourcesForDisplay(sources);
 
   if (displaySources.length === 0) {
     return null;
   }
+
+  const handlePreviewSource = async (fileId: number, fileName: string) => {
+    setPreview({
+      fileId,
+      fileName,
+      content: '',
+      isLoading: true,
+      error: null,
+    });
+
+    try {
+      const content = await fileService.downloadFileText(fileId);
+      setPreview({
+        fileId,
+        fileName,
+        content,
+        isLoading: false,
+        error: null,
+      });
+    } catch (err: unknown) {
+      setPreview({
+        fileId,
+        fileName,
+        content: '',
+        isLoading: false,
+        error: err instanceof Error ? err.message : 'Failed to load file preview.',
+      });
+    }
+  };
+
+  const closePreview = () => {
+    setPreview(null);
+  };
+
+  useEffect(() => {
+    if (!preview) {
+      return undefined;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        closePreview();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [preview]);
 
   return (
     <div className="mt-3 border-t border-border/50 pt-3 text-left">
@@ -176,23 +241,21 @@ const SourceReferences: React.FC<SourceReferencesProps> = ({ sources }) => {
             <>
               <FileText className="h-3.5 w-3.5 shrink-0" />
               <span className="min-w-0 truncate">{label}</span>
-              {hasFileId ? <ExternalLink className="h-3 w-3 shrink-0" /> : null}
+              {hasFileId ? <Eye className="h-3 w-3 shrink-0" /> : null}
             </>
           );
 
           if (hasFileId) {
             return (
-              <a
+              <button
                 key={key}
-                href={`/api/v1/files/${fileId}`}
-                target="_blank"
-                rel="noreferrer"
                 title={`Preview ${label}`}
                 data-testid={`source-preview-${fileId}`}
+                onClick={() => handlePreviewSource(fileId, label)}
                 className="inline-flex max-w-full items-center gap-1.5 rounded-md border border-border bg-muted/40 px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted"
               >
                 {content}
-              </a>
+              </button>
             );
           }
 
@@ -207,6 +270,65 @@ const SourceReferences: React.FC<SourceReferencesProps> = ({ sources }) => {
           );
         })}
       </div>
+
+      {preview && createPortal(
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/70 p-6"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={`source-preview-title-${preview.fileId}`}
+        >
+          <div className="flex max-h-[82vh] w-full max-w-4xl flex-col rounded-xl border border-border bg-slate-950 shadow-2xl">
+            <div className="flex items-center justify-between gap-4 border-b border-border/60 px-5 py-4">
+              <div className="min-w-0">
+                <h3
+                  id={`source-preview-title-${preview.fileId}`}
+                  className="truncate text-sm font-semibold text-foreground"
+                >
+                  {preview.fileName}
+                </h3>
+                <p className="mt-1 text-xs font-mono uppercase text-muted-foreground">
+                  Reference preview
+                </p>
+              </div>
+              <button
+                onClick={closePreview}
+                className="rounded-lg p-1.5 text-slate-500 transition-all hover:bg-muted/40 hover:text-foreground"
+                title="Close preview"
+                data-testid="close-source-preview"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-auto px-5 py-4">
+              {preview.isLoading ? (
+                <div className="flex items-center justify-center py-16 text-sm text-muted-foreground">
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin text-primary" />
+                  <span>Loading preview...</span>
+                </div>
+              ) : preview.error ? (
+                <div className="rounded-lg border border-red-500/20 bg-red-600/10 p-4 text-sm text-red-400">
+                  {preview.error}
+                </div>
+              ) : isMarkdownFileName(preview.fileName) ? (
+                <div className="max-w-none text-sm leading-7 text-slate-200" data-testid="source-markdown-preview">
+                  <ReactMarkdown components={markdownComponents} remarkPlugins={[remarkGfm]}>
+                    {preview.content}
+                  </ReactMarkdown>
+                </div>
+              ) : (
+                <pre
+                  className="whitespace-pre-wrap rounded-lg border border-border/60 bg-slate-900/70 p-4 text-xs leading-6 text-slate-100"
+                  data-testid="source-text-preview"
+                >
+                  {preview.content}
+                </pre>
+              )}
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 };

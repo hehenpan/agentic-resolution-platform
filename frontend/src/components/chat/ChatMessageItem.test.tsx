@@ -1,10 +1,15 @@
-import { render, screen } from '@testing-library/react';
-import { describe, it, expect } from 'vitest';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ChatMessageItem } from './ChatMessageItem';
 import type { ChatMessage } from '../../types/chat';
 import { useAuthStore } from '../../store/authStore';
+import { fileService } from '../../services/fileService';
 
 describe('ChatMessageItem Component', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it('renders user message with logged-in user email correctly', () => {
     useAuthStore.setState({ userEmail: 'agent_user@company.com' });
 
@@ -74,7 +79,8 @@ describe('ChatMessageItem Component', () => {
     expect(screen.queryByText('Failed to send or process message')).not.toBeInTheDocument();
   });
 
-  it('renders source reference file links for assistant messages', () => {
+  it('opens a preview dialog when a source reference file is clicked', async () => {
+    vi.spyOn(fileService, 'downloadFileText').mockResolvedValueOnce('# Return Policy\n\nPreview content.');
     const agentMsg: ChatMessage = {
       id: 'msg_sources',
       role: 'assistant',
@@ -97,10 +103,17 @@ describe('ChatMessageItem Component', () => {
 
     render(<ChatMessageItem message={agentMsg} />);
 
-    const previewLink = screen.getByTestId('source-preview-123');
+    const previewButton = screen.getByTestId('source-preview-123');
     expect(screen.getByText('References')).toBeInTheDocument();
-    expect(previewLink).toHaveTextContent('returns.md');
-    expect(previewLink).toHaveAttribute('href', '/api/v1/files/123');
+    expect(previewButton).toHaveTextContent('returns.md');
+
+    fireEvent.click(previewButton);
+
+    await waitFor(() => {
+      expect(fileService.downloadFileText).toHaveBeenCalledWith(123);
+    });
+    expect(await screen.findByRole('dialog', { name: 'returns.md' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Return Policy', level: 1 })).toBeInTheDocument();
   });
 
   it('deduplicates source reference links by file id for display only', () => {
@@ -166,7 +179,7 @@ describe('ChatMessageItem Component', () => {
 
     const previewLink = screen.getByTestId('source-preview-456');
     expect(screen.getAllByText('returns.md')).toHaveLength(1);
-    expect(previewLink).toHaveAttribute('href', '/api/v1/files/456');
+    expect(previewLink).toHaveTextContent('returns.md');
   });
 
   it('deduplicates source references by title when file id is unavailable', () => {
@@ -235,8 +248,72 @@ describe('ChatMessageItem Component', () => {
     render(<ChatMessageItem message={agentMsg} />);
 
     expect(screen.getAllByText('general_ecommerce_terms_and_conditions.md')).toHaveLength(1);
-    expect(screen.getByTestId('source-preview-3170')).toHaveAttribute('href', '/api/v1/files/3170');
+    expect(screen.getByTestId('source-preview-3170')).toHaveTextContent('general_ecommerce_terms_and_conditions.md');
     expect(screen.queryByTestId('source-preview-5559')).not.toBeInTheDocument();
     expect(screen.queryByTestId('source-preview-3392')).not.toBeInTheDocument();
+  });
+
+  it('shows an error in the source preview dialog when preview loading fails', async () => {
+    vi.spyOn(fileService, 'downloadFileText').mockRejectedValueOnce(new Error('Preview failed'));
+    const agentMsg: ChatMessage = {
+      id: 'msg_source_error',
+      role: 'assistant',
+      content: 'Policy answer.',
+      timestamp: new Date().toISOString(),
+      sourceParts: [
+        {
+          kind: 'sources',
+          sources: [
+            {
+              source_id: 'point_1',
+              file_id: 999,
+              source_type: 'policy_rag',
+              title: 'returns.txt',
+            },
+          ],
+        },
+      ],
+    };
+
+    render(<ChatMessageItem message={agentMsg} />);
+
+    fireEvent.click(screen.getByTestId('source-preview-999'));
+
+    expect(await screen.findByRole('dialog', { name: 'returns.txt' })).toBeInTheDocument();
+    expect(await screen.findByText('Preview failed')).toBeInTheDocument();
+  });
+
+  it('closes the source preview dialog when Escape is pressed', async () => {
+    vi.spyOn(fileService, 'downloadFileText').mockResolvedValueOnce('Preview content.');
+    const agentMsg: ChatMessage = {
+      id: 'msg_source_escape',
+      role: 'assistant',
+      content: 'Policy answer.',
+      timestamp: new Date().toISOString(),
+      sourceParts: [
+        {
+          kind: 'sources',
+          sources: [
+            {
+              source_id: 'point_1',
+              file_id: 321,
+              source_type: 'policy_rag',
+              title: 'returns.txt',
+            },
+          ],
+        },
+      ],
+    };
+
+    render(<ChatMessageItem message={agentMsg} />);
+
+    fireEvent.click(screen.getByTestId('source-preview-321'));
+    expect(await screen.findByRole('dialog', { name: 'returns.txt' })).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: 'returns.txt' })).not.toBeInTheDocument();
+    });
   });
 });
