@@ -39,7 +39,7 @@ def build_event_id(
     return str(uuid5(AGENT_EVENT_NAMESPACE, f"{kind.value}:{thread_id}:{subject_key}"))
 
 
-class AgentRunProjector:
+class AgentRunEventProjector:
     """Convert one agent run's raw stream and final state into domain events."""
 
     def __init__(
@@ -357,10 +357,10 @@ class AgentRunProjector:
                     ):
                         found.extend(child)
                     continue
-                found.extend(AgentRunProjector._find_output_payloads(child))
+                found.extend(AgentRunEventProjector._find_output_payloads(child))
         elif isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
             for child in value:
-                found.extend(AgentRunProjector._find_output_payloads(child))
+                found.extend(AgentRunEventProjector._find_output_payloads(child))
         return found
 
     @staticmethod

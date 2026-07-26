@@ -17,8 +17,8 @@ from shared_common.schemas.ai_agent import (
     StructuredDataPart,
 )
 
-from ai_agent_sdk.agent_run_projector import (
-    AgentRunProjector,
+from ai_agent_sdk.agent_run_event_projector import (
+    AgentRunEventProjector,
     build_event_id,
 )
 
@@ -36,8 +36,8 @@ def _output(output_id: str, text: str) -> dict[str, object]:
     }
 
 
-def _projector() -> AgentRunProjector:
-    return AgentRunProjector(
+def _projector() -> AgentRunEventProjector:
+    return AgentRunEventProjector(
         thread_id=THREAD_ID,
         clock=lambda: CREATED_AT,
     )
@@ -416,7 +416,7 @@ def test_terminal_paths_are_mutually_exclusive() -> None:
 
 
 def test_metadata_and_checkpoint_events_update_internal_context_only() -> None:
-    projector = AgentRunProjector(thread_id=THREAD_ID, clock=lambda: CREATED_AT)
+    projector = AgentRunEventProjector(thread_id=THREAD_ID, clock=lambda: CREATED_AT)
 
     assert projector.process({"type": "metadata", "data": {}}) == []
     assert (
@@ -444,7 +444,7 @@ def test_stream_part_object_compatibility() -> None:
             self.event = event
             self.data = data
 
-    projector = AgentRunProjector(thread_id=THREAD_ID, clock=lambda: CREATED_AT)
+    projector = AgentRunEventProjector(thread_id=THREAD_ID, clock=lambda: CREATED_AT)
     metadata_part = FakeStreamPart("metadata", {"run_id": "run-123"})
     updates_part = FakeStreamPart(
         "updates",
