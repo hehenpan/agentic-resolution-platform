@@ -73,4 +73,170 @@ describe('ChatMessageItem Component', () => {
     expect(screen.getByText('Agent Assistant')).toBeInTheDocument();
     expect(screen.queryByText('Failed to send or process message')).not.toBeInTheDocument();
   });
+
+  it('renders source reference file links for assistant messages', () => {
+    const agentMsg: ChatMessage = {
+      id: 'msg_sources',
+      role: 'assistant',
+      content: 'Policy answer.',
+      timestamp: new Date().toISOString(),
+      sourceParts: [
+        {
+          kind: 'sources',
+          sources: [
+            {
+              source_id: 'point_1',
+              file_id: 123,
+              source_type: 'policy_rag',
+              title: 'returns.md',
+            },
+          ],
+        },
+      ],
+    };
+
+    render(<ChatMessageItem message={agentMsg} />);
+
+    const previewLink = screen.getByTestId('source-preview-123');
+    expect(screen.getByText('References')).toBeInTheDocument();
+    expect(previewLink).toHaveTextContent('returns.md');
+    expect(previewLink).toHaveAttribute('href', '/api/v1/files/123');
+  });
+
+  it('deduplicates source reference links by file id for display only', () => {
+    const agentMsg: ChatMessage = {
+      id: 'msg_duplicate_sources',
+      role: 'assistant',
+      content: 'Policy answer.',
+      timestamp: new Date().toISOString(),
+      sourceParts: [
+        {
+          kind: 'sources',
+          sources: [
+            {
+              source_id: 'point_1',
+              file_id: 123,
+              source_type: 'policy_rag',
+              title: 'returns.md',
+            },
+            {
+              source_id: 'point_2',
+              file_id: 123,
+              source_type: 'policy_rag',
+              title: 'returns.md',
+            },
+          ],
+        },
+      ],
+    };
+
+    render(<ChatMessageItem message={agentMsg} />);
+
+    expect(screen.getAllByTestId('source-preview-123')).toHaveLength(1);
+  });
+
+  it('deduplicates source references using payload file id fallback', () => {
+    const agentMsg: ChatMessage = {
+      id: 'msg_payload_file_id_sources',
+      role: 'assistant',
+      content: 'Policy answer.',
+      timestamp: new Date().toISOString(),
+      sourceParts: [
+        {
+          kind: 'sources',
+          sources: [
+            {
+              source_id: 'point_1',
+              source_type: 'policy_rag',
+              title: 'returns.md',
+              attributes: { payload: { file_id: 456 } },
+            },
+            {
+              source_id: 'point_2',
+              source_type: 'policy_rag',
+              title: 'returns.md',
+              attributes: { payload: { file_id: 456 } },
+            },
+          ],
+        },
+      ],
+    };
+
+    render(<ChatMessageItem message={agentMsg} />);
+
+    const previewLink = screen.getByTestId('source-preview-456');
+    expect(screen.getAllByText('returns.md')).toHaveLength(1);
+    expect(previewLink).toHaveAttribute('href', '/api/v1/files/456');
+  });
+
+  it('deduplicates source references by title when file id is unavailable', () => {
+    const agentMsg: ChatMessage = {
+      id: 'msg_title_sources',
+      role: 'assistant',
+      content: 'Policy answer.',
+      timestamp: new Date().toISOString(),
+      sourceParts: [
+        {
+          kind: 'sources',
+          sources: [
+            {
+              source_id: 'point_1',
+              source_type: 'policy_rag',
+              title: 'general_ecommerce_terms_and_conditions.md',
+            },
+            {
+              source_id: 'point_2',
+              source_type: 'policy_rag',
+              title: 'general_ecommerce_terms_and_conditions.md',
+            },
+          ],
+        },
+      ],
+    };
+
+    render(<ChatMessageItem message={agentMsg} />);
+
+    expect(screen.getAllByText('general_ecommerce_terms_and_conditions.md')).toHaveLength(1);
+  });
+
+  it('deduplicates source references by file name before file id for RAG chunks', () => {
+    const agentMsg: ChatMessage = {
+      id: 'msg_staging_sources',
+      role: 'assistant',
+      content: 'Policy answer.',
+      timestamp: new Date().toISOString(),
+      sourceParts: [
+        {
+          kind: 'sources',
+          sources: [
+            {
+              source_id: '3170',
+              file_id: 3170,
+              source_type: 'policy_rag',
+              title: 'general_ecommerce_terms_and_conditions.md',
+            },
+            {
+              source_id: '5559',
+              file_id: 5559,
+              source_type: 'policy_rag',
+              title: 'general_ecommerce_terms_and_conditions.md',
+            },
+            {
+              source_id: '3392',
+              file_id: 3392,
+              source_type: 'policy_rag',
+              title: 'general_ecommerce_terms_and_conditions.md',
+            },
+          ],
+        },
+      ],
+    };
+
+    render(<ChatMessageItem message={agentMsg} />);
+
+    expect(screen.getAllByText('general_ecommerce_terms_and_conditions.md')).toHaveLength(1);
+    expect(screen.getByTestId('source-preview-3170')).toHaveAttribute('href', '/api/v1/files/3170');
+    expect(screen.queryByTestId('source-preview-5559')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('source-preview-3392')).not.toBeInTheDocument();
+  });
 });

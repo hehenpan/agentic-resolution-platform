@@ -24,6 +24,7 @@ def _policy_chunk() -> PolicyChunk:
         file_name="returns.md",
         text="Returns are accepted within 30 days.",
         payload={
+            "file_id": 123,
             "file_name": "returns.md",
             "text": "Returns are accepted within 30 days.",
             "section": "eligibility",
@@ -60,12 +61,14 @@ def test_policy_qa_output_maps_text_and_policy_sources() -> None:
 
     source = sources_part.sources[0]
     assert source.source_id == "42"
+    assert source.file_id == 123
     assert source.source_type == AgentSourceType.POLICY_RAG
     assert source.title == "returns.md"
     assert source.attributes == {
         "score": 0.92,
         "text": "Returns are accepted within 30 days.",
         "payload": {
+            "file_id": 123,
             "file_name": "returns.md",
             "text": "Returns are accepted within 30 days.",
             "section": "eligibility",

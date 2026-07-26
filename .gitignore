@@ -261,5 +261,5 @@ data/*
 deploy/data
 deploy/data/*
 
-./playwright-cli
-./playwright-cli/*
+.playwright-cli
+.playwright-cli/*

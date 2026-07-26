@@ -5,6 +5,7 @@ import type {
   ChatMessageItem,
   InterruptEventData,
   WebAgentOutputPart,
+  WebSourcesPart,
   WebHumanInputRequestedData,
 } from '../types/chat';
 import { chatService } from '../services/chatService';
@@ -164,10 +165,11 @@ const getOutputParts = (data: Record<string, unknown>): unknown[] => {
 
 const getAssistantOutputUpdate = (
   data: Record<string, unknown>
-): Pick<AssistantStreamEventUpdate, 'contentDelta' | 'structuredParts'> => {
+): Pick<AssistantStreamEventUpdate, 'contentDelta' | 'structuredParts' | 'sourceParts'> => {
   const parts = getOutputParts(data);
   let contentDelta = '';
   const structuredParts: WebAgentOutputPart[] = [];
+  const sourceParts: WebSourcesPart[] = [];
 
   for (const part of parts) {
     if (!part || typeof part !== 'object') {
@@ -179,6 +181,8 @@ const getAssistantOutputUpdate = (
       contentDelta += candidate.text;
     } else if (candidate.kind === 'structured_data') {
       structuredParts.push(part as WebAgentOutputPart);
+    } else if (candidate.kind === 'sources') {
+      sourceParts.push(part as WebSourcesPart);
     }
   }
 
@@ -188,14 +192,15 @@ const getAssistantOutputUpdate = (
     contentDelta = data.text;
   }
 
-  return { contentDelta, structuredParts };
+  return { contentDelta, structuredParts, sourceParts };
 };
 
 const hasVisibleAssistantUpdate = (update: AssistantStreamEventUpdate): boolean => {
   return Boolean(
-    update.contentDelta ||
+      update.contentDelta ||
       update.humanInputRequest ||
-      (update.structuredParts && update.structuredParts.length > 0)
+      (update.structuredParts && update.structuredParts.length > 0) ||
+      (update.sourceParts && update.sourceParts.some((part) => part.sources.length > 0))
   );
 };
 
@@ -212,6 +217,7 @@ interface AssistantStreamEventUpdate {
   timestamp: string;
   contentDelta?: string;
   structuredParts?: WebAgentOutputPart[];
+  sourceParts?: WebSourcesPart[];
   humanInputRequest?: WebHumanInputRequestedData;
   status?: ChatMessage['status'];
 }
@@ -337,6 +343,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
 
           let textContent = '';
           let structuredParts: WebAgentOutputPart[] | undefined = undefined;
+          let sourceParts: WebSourcesPart[] | undefined = undefined;
           let humanInputRequest: WebHumanInputRequestedData | null = null;
 
           if (parsed && typeof parsed === 'object') {
@@ -347,6 +354,9 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
               textContent = outputUpdate.contentDelta || '';
               if (outputUpdate.structuredParts && outputUpdate.structuredParts.length > 0) {
                 structuredParts = outputUpdate.structuredParts;
+              }
+              if (outputUpdate.sourceParts && outputUpdate.sourceParts.length > 0) {
+                sourceParts = outputUpdate.sourceParts;
               }
             } else if (kind === 'agent.human_input_requested' || kind === 'human_input_requested') {
               humanInputRequest = parsed as unknown as WebHumanInputRequestedData;
@@ -380,6 +390,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
             role,
             content: textContent,
             structuredParts,
+            sourceParts,
             humanInputRequest,
             timestamp: new Date(item.create_ts_ms).toISOString(),
             status: 'completed',
@@ -481,6 +492,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
               timestamp: getEventTimestamp(data),
               contentDelta: outputUpdate.contentDelta,
               structuredParts: outputUpdate.structuredParts,
+              sourceParts: outputUpdate.sourceParts,
               status: 'streaming',
             } satisfies AssistantStreamEventUpdate;
             get().applyAssistantStreamEvent(chatSessionId, agentMsgId, update);
@@ -633,6 +645,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
               timestamp: getEventTimestamp(data),
               contentDelta: outputUpdate.contentDelta,
               structuredParts: outputUpdate.structuredParts,
+              sourceParts: outputUpdate.sourceParts,
               status: 'streaming',
             } satisfies AssistantStreamEventUpdate;
             get().applyAssistantStreamEvent(chatSessionId, agentMsgId, update);
@@ -829,6 +842,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       );
       const contentDelta = update.contentDelta ?? '';
       const structuredParts = update.structuredParts ?? [];
+      const sourceParts = update.sourceParts ?? [];
 
       const applyUpdate = (message: ChatMessage): ChatMessage => ({
         ...message,
@@ -841,6 +855,10 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
           structuredParts.length > 0
             ? [...(message.structuredParts || []), ...structuredParts]
             : message.structuredParts,
+        sourceParts:
+          sourceParts.length > 0
+            ? [...(message.sourceParts || []), ...sourceParts]
+            : message.sourceParts,
       });
 
       const nextMessages =
@@ -859,6 +877,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
                 status: update.status ?? 'streaming',
                 humanInputRequest: update.humanInputRequest,
                 structuredParts: structuredParts.length > 0 ? structuredParts : undefined,
+                sourceParts: sourceParts.length > 0 ? sourceParts : undefined,
               },
             ];
 

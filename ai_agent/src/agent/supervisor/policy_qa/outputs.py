@@ -26,6 +26,7 @@ def build_policy_qa_output(
         sources.append(
             SourceReference(
                 source_id=str(chunk.point_id),
+                file_id=serialized_chunk["payload"].get("file_id"),
                 source_type=AgentSourceType.POLICY_RAG,
                 title=chunk.file_name,
                 attributes={
