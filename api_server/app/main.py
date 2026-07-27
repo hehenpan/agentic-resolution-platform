@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from starlette_context.middleware import ContextMiddleware
 from app.core.logger import setup_logging
+from app.core.observability import setup_observability
 from app.api.v1.router import api_router_v1
 from app.middleware.middleware import context_plugins, VerifySessionidMiddleware
 
@@ -8,6 +9,7 @@ from app.middleware.middleware import context_plugins, VerifySessionidMiddleware
 setup_logging()
 
 app = FastAPI()
+setup_observability(app)
 
 # Add session validation middleware
 app.add_middleware(VerifySessionidMiddleware)
@@ -17,7 +19,6 @@ app.add_middleware(ContextMiddleware, plugins=context_plugins)
 
 # Include router
 app.include_router(api_router_v1, prefix="/api/v1")
-
 
 
 

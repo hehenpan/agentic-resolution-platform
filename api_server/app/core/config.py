@@ -73,6 +73,48 @@ class Settings(object):
         # AI Agent configurations
         self.AI_AGENT_URL = self._config.get("ai_agent", "url", fallback=None)
 
+        # OpenTelemetry configurations
+        self.OTEL_ENABLED = self._config.getboolean(
+            "opentelemetry",
+            "enabled",
+            fallback=False,
+        )
+        self.OTEL_SERVICE_NAME = self._config.get(
+            "opentelemetry",
+            "service_name",
+            fallback="api_server",
+        )
+        self.OTEL_SERVICE_NAMESPACE = self._config.get(
+            "opentelemetry",
+            "service_namespace",
+            fallback="agentic-resolution-platform",
+        )
+        self.OTEL_EXPORTER_OTLP_ENDPOINT = self._config.get(
+            "opentelemetry",
+            "exporter_otlp_endpoint",
+            fallback="http://localhost:4317",
+        )
+        self.OTEL_EXPORTER_OTLP_PROTOCOL = self._config.get(
+            "opentelemetry",
+            "exporter_otlp_protocol",
+            fallback="grpc",
+        )
+        self.OTEL_EXPORTER_OTLP_INSECURE = self._config.getboolean(
+            "opentelemetry",
+            "exporter_otlp_insecure",
+            fallback=True,
+        )
+        self.OTEL_TRACES_SAMPLER = self._config.get(
+            "opentelemetry",
+            "traces_sampler",
+            fallback="parentbased_traceidratio",
+        )
+        self.OTEL_TRACES_SAMPLER_ARG = self._config.getfloat(
+            "opentelemetry",
+            "traces_sampler_arg",
+            fallback=1.0,
+        )
+
 
 
 
