@@ -45,6 +45,7 @@ services:
       - APP_ENV=staging
     depends_on:
       - ai_agent
+      - otel_collector
     networks:
       - platform-network
 
@@ -113,6 +114,52 @@ services:
       - ../data/staging/postgres:/var/lib/postgresql/data
     networks:
       - platform-network
+
+  otel_collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    container_name: platform_otel_collector_staging
+    command: ["--config=/etc/otel-collector.yml"]
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+    volumes:
+      - ./otel/otel-collector.yml:/etc/otel-collector.yml:ro
+    depends_on:
+      - tempo
+    networks:
+      - platform-network
+    restart: unless-stopped
+
+  tempo:
+    image: grafana/tempo:latest
+    container_name: platform_tempo_staging
+    command: ["-config.file=/etc/tempo.yml"]
+    ports:
+      - "3200:3200"
+    volumes:
+      - ./otel/tempo.yml:/etc/tempo.yml:ro
+      - ../data/staging/tempo:/var/tempo
+    networks:
+      - platform-network
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: platform_grafana_staging
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_AUTH_ANONYMOUS_ENABLED=false
+    volumes:
+      - ../data/staging/grafana:/var/lib/grafana
+      - ./otel/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+    depends_on:
+      - tempo
+    networks:
+      - platform-network
+    restart: unless-stopped
 
 networks:
   platform-network:
