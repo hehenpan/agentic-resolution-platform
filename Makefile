@@ -21,7 +21,7 @@ staging-down: stage-stop
 
 # Production commands
 prod-build:
-	docker compose -f deploy/docker-compose.prod.yml --env-file deploy/env/.env.prod build
+	COMPOSE_PARALLEL_LIMIT=1 docker compose -f deploy/docker-compose.prod.yml --env-file deploy/env/.env.prod build
 
 prod-start:
 	docker compose -f deploy/docker-compose.prod.yml --env-file deploy/env/.env.prod up
