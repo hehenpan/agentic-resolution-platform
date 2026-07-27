@@ -2,6 +2,9 @@
 
 .PHONY: stage-build stage-start stage-stop stage-down staging-up staging-down prod-build prod-start prod-stop prod-down prod-up
 
+PROD_COMPOSE = docker compose -f deploy/docker-compose.prod.yml --env-file deploy/env/.env.prod
+BUILD_SERVICES = frontend api_server ai_agent mcp_server
+
 # Staging commands
 stage-build:
 	docker compose -f deploy/docker-compose.staging.yml --env-file deploy/env/.env.staging build
@@ -21,7 +24,9 @@ staging-down: stage-stop
 
 # Production commands
 prod-build:
-	COMPOSE_PARALLEL_LIMIT=1 docker compose -f deploy/docker-compose.prod.yml --env-file deploy/env/.env.prod build
+	for service in $(BUILD_SERVICES); do \
+		$(PROD_COMPOSE) build $$service; \
+	done
 
 prod-start:
 	docker compose -f deploy/docker-compose.prod.yml --env-file deploy/env/.env.prod up
