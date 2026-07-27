@@ -41,6 +41,7 @@ services:
       - APP_ENV=prod
     depends_on:
       - ai_agent
+      - otel_collector
     networks:
       - platform-network
 
@@ -56,10 +57,14 @@ services:
       - ../data/prod/ai_agent:/app/data
     environment:
       - APP_ENV=prod
+      - AI_AGENT_LOG_DIR=/var/log/ai_agent
+      - LOG_LEVEL=WARNING
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
       - TAVILY_API_KEY=${TAVILY_API_KEY}
+      - POSTGRES_URI=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
     depends_on:
       - mcp_server
+      - postgres
       - qdrant
     networks:
       - platform-network
@@ -89,6 +94,66 @@ services:
       - APP_ENV=prod
     networks:
       - platform-network
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: platform_postgres_prod
+    ports:
+      - "127.0.0.1:5432:5432"
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    volumes:
+      - ../data/prod/postgres:/var/lib/postgresql/data
+    networks:
+      - platform-network
+
+  otel_collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    container_name: platform_otel_collector_prod
+    command: ["--config=/etc/otel-collector.yml"]
+    ports:
+      - "127.0.0.1:4317:4317"
+      - "127.0.0.1:4318:4318"
+    volumes:
+      - ./otel/otel-collector.yml:/etc/otel-collector.yml:ro
+    depends_on:
+      - tempo
+    networks:
+      - platform-network
+    restart: unless-stopped
+
+  tempo:
+    image: grafana/tempo:latest
+    container_name: platform_tempo_prod
+    command: ["-config.file=/etc/tempo.yml"]
+    ports:
+      - "127.0.0.1:3200:3200"
+    volumes:
+      - ./otel/tempo.yml:/etc/tempo.yml:ro
+      - ../data/prod/tempo:/var/tempo
+    networks:
+      - platform-network
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: platform_grafana_prod
+    ports:
+      - "127.0.0.1:3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_AUTH_ANONYMOUS_ENABLED=false
+    volumes:
+      - ../data/prod/grafana:/var/lib/grafana
+      - ./otel/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+    depends_on:
+      - tempo
+    networks:
+      - platform-network
+    restart: unless-stopped
 
 networks:
   platform-network:
