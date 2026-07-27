@@ -1,9 +1,18 @@
 version: '3.8'
 
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   nginx:
     image: nginx:alpine
     container_name: platform_nginx_prod
+    mem_limit: 64m
+    cpus: "0.25"
+    logging: *default-logging
     ports:
       - "80:80"
     volumes:
@@ -19,6 +28,9 @@ services:
       context: ..
       dockerfile: deploy/dockerfiles/frontend.prod.Dockerfile
     container_name: platform_frontend_prod
+    mem_limit: 256m
+    cpus: "0.50"
+    logging: *default-logging
     ports:
       - "127.0.0.1:3000:3000"  # Secure loopback mapping (accessible on host only)
     # No volume mapping for code in production
@@ -32,6 +44,9 @@ services:
       context: ..
       dockerfile: deploy/dockerfiles/api_server.Dockerfile
     container_name: platform_api_server_prod
+    mem_limit: 384m
+    cpus: "0.75"
+    logging: *default-logging
     ports:
       - "127.0.0.1:8000:8000"  # Secure loopback mapping
     volumes:
@@ -41,7 +56,6 @@ services:
       - APP_ENV=prod
     depends_on:
       - ai_agent
-      - otel_collector
     networks:
       - platform-network
 
@@ -50,6 +64,9 @@ services:
       context: ..
       dockerfile: deploy/dockerfiles/ai_agent.Dockerfile
     container_name: platform_ai_agent_prod
+    mem_limit: 768m
+    cpus: "1.00"
+    logging: *default-logging
     ports:
       - "127.0.0.1:2024:2024"  # Secure loopback mapping
     volumes:
@@ -72,6 +89,9 @@ services:
   qdrant:
     image: qdrant/qdrant:v1.18.0
     container_name: platform_qdrant_prod
+    mem_limit: 512m
+    cpus: "0.75"
+    logging: *default-logging
     ports:
       - "127.0.0.1:6333:6333"
       - "127.0.0.1:6334:6334"
@@ -85,6 +105,9 @@ services:
       context: ..
       dockerfile: deploy/dockerfiles/mcp_server.Dockerfile
     container_name: platform_mcp_server_prod
+    mem_limit: 256m
+    cpus: "0.50"
+    logging: *default-logging
     ports:
       - "127.0.0.1:8500:8500"  # Secure loopback mapping
     volumes:
@@ -98,6 +121,9 @@ services:
   postgres:
     image: postgres:16-alpine
     container_name: platform_postgres_prod
+    mem_limit: 256m
+    cpus: "0.50"
+    logging: *default-logging
     ports:
       - "127.0.0.1:5432:5432"
     environment:
@@ -112,6 +138,11 @@ services:
   otel_collector:
     image: otel/opentelemetry-collector-contrib:latest
     container_name: platform_otel_collector_prod
+    profiles:
+      - observability
+    mem_limit: 128m
+    cpus: "0.25"
+    logging: *default-logging
     command: ["--config=/etc/otel-collector.yml"]
     ports:
       - "127.0.0.1:4317:4317"
@@ -127,6 +158,11 @@ services:
   tempo:
     image: grafana/tempo:latest
     container_name: platform_tempo_prod
+    profiles:
+      - observability
+    mem_limit: 256m
+    cpus: "0.50"
+    logging: *default-logging
     command: ["-config.file=/etc/tempo.yml"]
     ports:
       - "127.0.0.1:3200:3200"
@@ -140,6 +176,11 @@ services:
   grafana:
     image: grafana/grafana:latest
     container_name: platform_grafana_prod
+    profiles:
+      - observability
+    mem_limit: 256m
+    cpus: "0.50"
+    logging: *default-logging
     ports:
       - "127.0.0.1:3001:3000"
     environment:
